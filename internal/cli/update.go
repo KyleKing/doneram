@@ -32,6 +32,11 @@ func newUpdateCommand() *cli.Command {
 				Name:  "skip-healthcheck",
 				Usage: "skip healthcheck validation",
 			},
+			&cli.StringFlag{
+				Name:  "format",
+				Usage: "output format: stdout, github-actions, json",
+				Value: "stdout",
+			},
 		},
 		Action: runUpdate,
 	}
@@ -45,8 +50,9 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 	verbose := cmd.Bool("verbose")
 	skipBuild := cmd.Bool("skip-build")
 	skipHealthcheck := cmd.Bool("skip-healthcheck")
+	format := cmd.String("format")
 
-	rep := reporter.NewReporter(verbose)
+	rep := reporter.NewOutputReporter(format, verbose)
 
 	// Parse Dockerfile
 	content, err := os.ReadFile(file)

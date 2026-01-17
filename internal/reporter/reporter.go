@@ -7,6 +7,14 @@ import (
 	"github.com/kyleking/doner/internal/updater"
 )
 
+type OutputReporter interface {
+	ReportCheck(file string, instructionCount, directiveCount int, updates []updater.Update)
+	ReportUpdate(file string, updates []updater.Update, buildSuccess bool, buildError error)
+	ReportSummary(files int, totalUpdates int, successful int, failed int)
+	ReportError(file string, err error)
+	ReportValidation(imageID string, success bool, err error)
+}
+
 // Reporter formats and displays update results
 type Reporter struct {
 	verbose bool
@@ -31,9 +39,13 @@ func (r *Reporter) ReportCheck(file string, instructionCount, directiveCount int
 		return
 	}
 
+	grouped := groupBySource(updates)
 	fmt.Println("Available updates:")
-	for _, update := range updates {
-		fmt.Printf("  → %s:%s -> %s\n", update.Package, update.OldVersion, update.NewVersion)
+	for source, sourceUpdates := range grouped {
+		fmt.Printf("\n  %s:\n", strings.ToUpper(source))
+		for _, update := range sourceUpdates {
+			fmt.Printf("    → %s:%s -> %s\n", update.Package, update.OldVersion, update.NewVersion)
+		}
 	}
 }
 
@@ -46,9 +58,13 @@ func (r *Reporter) ReportUpdate(file string, updates []updater.Update, buildSucc
 		return
 	}
 
+	grouped := groupBySource(updates)
 	fmt.Printf("  Applied %d update(s):\n", len(updates))
-	for _, update := range updates {
-		fmt.Printf("    → %s:%s -> %s\n", update.Package, update.OldVersion, update.NewVersion)
+	for source, sourceUpdates := range grouped {
+		fmt.Printf("\n    %s:\n", strings.ToUpper(source))
+		for _, update := range sourceUpdates {
+			fmt.Printf("      → %s:%s -> %s\n", update.Package, update.OldVersion, update.NewVersion)
+		}
 	}
 	fmt.Println()
 
@@ -93,4 +109,27 @@ func truncateImageID(imageID string) string {
 		return imageID[:12]
 	}
 	return imageID
+}
+
+func groupBySource(updates []updater.Update) map[string][]updater.Update {
+	grouped := make(map[string][]updater.Update)
+	for _, update := range updates {
+		source := update.Source
+		if source == "" {
+			source = "unknown"
+		}
+		grouped[source] = append(grouped[source], update)
+	}
+	return grouped
+}
+
+func NewOutputReporter(format string, verbose bool) OutputReporter {
+	switch format {
+	case "github-actions":
+		return NewGitHubActionsReporter(verbose)
+	case "json":
+		return NewJSONReporter(verbose)
+	default:
+		return NewReporter(verbose)
+	}
 }

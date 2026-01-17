@@ -24,6 +24,11 @@ func newCheckCommand() *cli.Command {
 				Aliases: []string{"f"},
 				Usage:   "path to Dockerfile (e.g., Dockerfile, docker/api/Dockerfile)",
 			},
+			&cli.StringFlag{
+				Name:  "format",
+				Usage: "output format: stdout, github-actions, json",
+				Value: "stdout",
+			},
 		},
 		Action: runCheck,
 	}
@@ -35,8 +40,9 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 		file = "Dockerfile"
 	}
 	verbose := cmd.Bool("verbose")
+	format := cmd.String("format")
 
-	rep := reporter.NewReporter(verbose)
+	rep := reporter.NewOutputReporter(format, verbose)
 
 	if verbose {
 		fmt.Printf("Checking %s for updates...\n", file)

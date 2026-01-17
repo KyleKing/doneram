@@ -10,11 +10,6 @@ func NewApp(version, commit, date string) *cli.Command {
 		Usage:   "Dockerfile version maintainer",
 		Version: version,
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "config",
-				Aliases: []string{"c"},
-				Usage:   "config file (default is .doner.yml)",
-			},
 			&cli.BoolFlag{
 				Name:  "verbose",
 				Usage: "verbose output",

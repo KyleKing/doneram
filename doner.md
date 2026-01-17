@@ -86,59 +86,6 @@ FROM legacy-image:1.0.0
 RUN apk add bash curl git vim  # Only updates bash, curl
 ```
 
-## Configuration File
-
-**`.doner.yml`** (optional, can run without it):
-
-```yaml
-version: 1
-
-# Global defaults
-defaults:
-  require_healthcheck: true
-  fail_on_error: true
-  include_changelogs: true
-
-# Dockerfile-specific configurations
-dockerfiles:
-  - path: docker/workers/Dockerfile
-    # Override defaults
-    require_healthcheck: true
-    healthcheck_timeout: 60s
-
-  - path: docker/api/Dockerfile
-    require_healthcheck: false
-    # Fallback if no HEALTHCHECK instruction
-    healthcheck_command: "curl -f http://localhost:3000/health || exit 1"
-
-  - path: docker/legacy/Dockerfile
-    # Process but don't fail the entire run if this fails
-    fail_on_error: false
-
-# Registry authentication
-registries:
-  ghcr.io:
-    token_env: GITHUB_TOKEN
-  docker.io:
-    username_env: DOCKER_USERNAME
-    password_env: DOCKER_PASSWORD
-
-# Output configuration
-output:
-  format: github-actions  # Options: github-actions, markdown, json
-  summary_file: doner-summary.md
-  details_file: doner-details.json
-
-# Package manager queries
-package_managers:
-  apk:
-    enabled: true
-    cache_refresh: true
-  apt:
-    enabled: true
-    update_first: true
-```
-
 ## CLI Usage
 
 ```bash
@@ -160,17 +107,11 @@ doner update -f Dockerfile --skip-build
 # Apply updates with build but skip healthcheck
 doner update -f Dockerfile --skip-healthcheck
 
-# Apply updates and commit (future functionality)
-doner update -f Dockerfile --commit -m "chore: Update Docker dependencies"
+# Output in GitHub Actions format
+doner check -f Dockerfile --format github-actions
 
-# Generate report only (future functionality)
-doner report -f Dockerfile -o markdown > updates.md
-
-# Parallel processing (future functionality)
-doner update --parallel --max-workers 4
-
-# Configuration file (future functionality)
-doner update --config .doner.yml
+# Output in JSON format
+doner check -f Dockerfile --format json
 ```
 
 ## GitHub Action
@@ -197,7 +138,7 @@ jobs:
       - name: Check for updates
         id: doner
         run: |
-          doner update -f docker/app/Dockerfile --config .doner.yml
+          doner update -f docker/app/Dockerfile --format github-actions
           echo "updates_available=$?" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
@@ -338,143 +279,86 @@ RUN apt-get update && apt-get install -y wget curl ca-certificates
 
 ---
 
-### Phase 3: Advanced Features
+### Phase 3: GitHub Actions Integration
 
-**Goal**: Parallel processing, changelog fetching, GitHub Actions integration
+**Goal**: Enable seamless GitHub Actions workflow integration
 
 #### Deliverables:
-1. **Configuration File Support**
-   - YAML config parsing (.doner.yml)
-   - Per-Dockerfile overrides
-   - Registry authentication
-   - Global defaults
+1. **GitHub Actions Output Format**
+   - Generate GitHub Actions summary (markdown)
+   - Set workflow outputs for downstream jobs
+   - JSON format for programmatic consumption
+   - STDOUT format (default, human-readable)
 
-2. **Parallel Processing**
-   - Process multiple Dockerfiles concurrently
-   - Worker pool management
-   - Error aggregation
-   - Progress reporting
+2. **CLI Output Options**
+   - `--format` flag: stdout, github-actions, json
+   - Environment detection (auto-enable in CI)
+   - Exit codes for automation
 
-3. **Changelog Fetching**
+#### Success Criteria:
+- ✅ Generate GitHub Actions summary markdown
+- ✅ Support multiple output formats
+- ✅ Clean integration with GitHub Actions workflows
+
+#### Test Cases:
+- GitHub Actions workflow with automatic summary generation
+- JSON output for downstream processing
+- Multiple Dockerfiles with grouped updates by source
+
+---
+
+### Future Enhancements
+
+**Goal**: Production hardening and ecosystem expansion
+
+#### Potential Features (Prioritized):
+
+**High Priority:**
+1. **Error Handling & Resilience**
+   - Retry logic with exponential backoff
+   - Rate limit handling for registries
+   - Graceful degradation on API failures
+
+2. **Testing & CI/CD**
+   - Increase test coverage (>80%)
+   - Mock registry responses for tests
+   - CI/CD pipeline (GitHub Actions)
+   - Integration tests with real Dockerfiles
+
+3. **Distribution**
+   - GitHub Releases with binaries (goreleaser)
+   - Multi-platform builds (Linux, macOS, Windows)
+   - Docker image for easy CI/CD integration
+
+**Medium Priority:**
+4. **Changelog Fetching**
    - GitHub Releases API (for GHCR images)
    - Docker Hub description parsing
    - PyPI changelog links
-   - Aggregate changelogs by package
+   - Include changelogs in output
 
-4. **GitHub Actions Output**
-   - Generate GitHub Actions summary (markdown)
-   - Set workflow outputs
-   - JSON report for downstream processing
-   - Failure annotations
-
-5. **Auto-commit Mode**
-   - Git integration
-   - Commit changed Dockerfiles
-   - Generate commit message with summary
-   - Optional branch creation
-
-6. **Advanced Version Patterns**
+5. **Advanced Version Patterns**
    - Pre-release support (^, &, !)
-   - Custom version schemes (CalVer, SemVer)
-   - Constraint expressions
+   - CalVer support
+   - Custom version constraints
 
-#### Success Criteria:
-- ✅ Process 10+ Dockerfiles in parallel
-- ✅ Generate GitHub Actions summary markdown
-- ✅ Fetch changelogs for Docker images and PyPI
-- ✅ Load configuration from .doner.yml
-- ✅ Auto-commit updates with descriptive message
-- ✅ Handle pre-release versions
+6. **Observability**
+   - Structured logging
+   - Debug mode (`--verbose` flag)
+   - Better error messages
 
-#### Test Cases:
-- Multiple Dockerfiles with different base images
-- Configuration-driven healthcheck fallbacks
-- Changelog aggregation for complex updates
-
----
-
-### Phase 4: Production Hardening
-
-**Goal**: Comprehensive error handling, testing, documentation, distribution
-
-#### Deliverables:
-1. **Error Handling & Resilience**
-   - Graceful degradation on API failures
-   - Retry logic with exponential backoff
-   - Rate limit handling
-   - Offline mode (cached data)
-
-2. **Comprehensive Testing**
-   - Unit tests (>80% coverage)
-   - Integration tests with real Dockerfiles
-   - Mock registry responses
-   - CI/CD pipeline (GitHub Actions)
-
-3. **Documentation**
-   - Comprehensive README
-   - Usage examples
-   - Configuration reference
-   - API documentation (GoDoc)
-   - Troubleshooting guide
-
-4. **Distribution**
-   - GitHub Releases with binaries
-   - Docker image (ironically)
-   - Homebrew formula
-   - Linux packages (deb, rpm)
-
-5. **Observability**
-   - Structured logging (zerolog)
-   - Debug mode
-   - Metrics (optional Prometheus export)
-   - Performance profiling
-
-6. **Security**
-   - Supply chain security (SBOM)
-   - Vulnerability scanning
-   - Secure credential handling
-   - Least-privilege container execution
-
-#### Success Criteria:
-- ✅ All core features tested
-- ✅ CI/CD builds and tests automatically
-- ✅ Documentation complete
-- ✅ Binary releases for major platforms
-- ✅ Homebrew installation working
-- ✅ Security scanning integrated
-
----
-
-### Phase 5: Community & Ecosystem (Future)
-
-**Goal**: Expand package manager support, plugin system, community adoption
-
-#### Potential Features:
-1. **Additional Package Managers**
+**Low Priority:**
+7. **Additional Package Managers**
    - Cargo (Rust)
    - Maven/Gradle (Java)
    - Bundler (Ruby)
    - Composer (PHP)
 
-2. **Plugin System**
-   - Custom resolvers
-   - Custom validators
-   - Pre/post-update hooks
-
-3. **Advanced Validation**
-   - Custom test commands
-   - Integration test execution
-   - Performance regression detection
-
-4. **Smart Updates**
-   - Dependency graph analysis
-   - Coordinated multi-Dockerfile updates
-   - Risk scoring
-
-5. **Web UI (Optional)**
-   - Dashboard for update history
-   - Configuration management
-   - Manual approval workflow
+8. **Advanced Features**
+   - Parallel processing for multiple Dockerfiles
+   - Auto-commit mode with git integration
+   - Registry authentication support
+   - Custom healthcheck commands
 
 ---
 
@@ -719,17 +603,12 @@ CMD ["app.main.handler"]
 ### Phase 2:
 - Supports top 4 package managers (apk, apt, pip, npm)
 - Correctly handles multi-package directives
-- < 5min execution time including container queries
+- Updates grouped by package source in output
 
 ### Phase 3:
-- Process 20 Dockerfiles in < 10min (parallel)
-- Changelog fetch success rate > 70%
-- GitHub Actions integration seamless
-
-### Phase 4:
-- Production use by 10+ teams
-- Zero security vulnerabilities
-- Documentation completeness score > 90%
+- GitHub Actions summary markdown generation
+- Multiple output formats (stdout, json, github-actions)
+- Clean CI/CD integration
 
 ## Future Considerations
 
