@@ -62,11 +62,11 @@ func (p *VersionPattern) Matches(version string) bool {
 		return false
 	}
 
-	if p.Suffix != "" && !matchSuffix(p.Suffix, versionSuffix) {
-		return false
+	if p.Suffix == "" {
+		return versionSuffix == ""
 	}
 
-	return true
+	return matchSuffix(p.Suffix, versionSuffix)
 }
 
 func matchSegment(pattern, value string) bool {

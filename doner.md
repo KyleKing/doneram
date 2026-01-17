@@ -30,17 +30,21 @@ The directive applies to the **next line** in the Dockerfile.
 Use `#` as a wildcard for version segments and `*` for suffixes:
 
 ```dockerfile
-# doner: python:3.13.#-alpine*
-FROM python:3.13.11-alpine3.21
+# Example from https://docs.astral.sh/uv/guides/integration/aws-lambda/
 
-# doner: uv:0.#.#
-COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
+# doner: uv:0.9.#
+FROM ghcr.io/astral-sh/uv:0.9.26 AS uv
 
-# doner: uv-build:0.9.24
-RUN uv pip install "uv-build==0.9.24"
+# doner: python:3.13.#
+FROM public.ecr.aws/lambda/python:3.13 AS builder
 
-# doner: bash:#.#.#
-RUN apk add --no-cache bash=5.2.15-r0
+# Example from https://github.com/elves/elvish
+
+# doner: golang:1.#.#-alpine*
+FROM golang:1.22-alpine3.19 as builder
+
+# doner: alpine:3.#
+FROM alpine:3.19
 ```
 
 **Pattern Semantics:**
@@ -97,17 +101,17 @@ defaults:
 
 # Dockerfile-specific configurations
 dockerfiles:
-  - path: workers/Dockerfile
+  - path: docker/workers/Dockerfile
     # Override defaults
     require_healthcheck: true
     healthcheck_timeout: 60s
 
-  - path: api/Dockerfile
+  - path: docker/api/Dockerfile
     require_healthcheck: false
     # Fallback if no HEALTHCHECK instruction
     healthcheck_command: "curl -f http://localhost:3000/health || exit 1"
 
-  - path: legacy/Dockerfile
+  - path: docker/legacy/Dockerfile
     # Process but don't fail the entire run if this fails
     fail_on_error: false
 
@@ -138,29 +142,29 @@ package_managers:
 ## CLI Usage
 
 ```bash
-# Check for updates (dry-run)
+# Check for updates (dry-run, looks for ./Dockerfile by default)
 doner check
 
 # Check specific Dockerfile
-doner check -f workers/Dockerfile
+doner check -f docker/api/Dockerfile
 
-# Apply updates
-doner update
+# Test with example fixtures
+doner check -f test/fixtures/elvish.Dockerfile
 
-# Apply updates and commit
-doner update --commit -m "chore: Update Docker dependencies"
+# Apply updates (future functionality)
+doner update -f Dockerfile
 
-# Generate report only
-doner report -o markdown > updates.md
+# Apply updates and commit (future functionality)
+doner update -f Dockerfile --commit -m "chore: Update Docker dependencies"
 
-# Parallel processing
+# Generate report only (future functionality)
+doner report -f Dockerfile -o markdown > updates.md
+
+# Parallel processing (future functionality)
 doner update --parallel --max-workers 4
 
-# Configuration file
+# Configuration file (future functionality)
 doner update --config .doner.yml
-
-# Verbose output
-doner update -v
 ```
 
 ## GitHub Action
@@ -187,7 +191,7 @@ jobs:
       - name: Check for updates
         id: doner
         run: |
-          doner update --config .doner.yml
+          doner update -f docker/app/Dockerfile --config .doner.yml
           echo "updates_available=$?" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
@@ -242,18 +246,21 @@ jobs:
 
 #### Success Criteria:
 - ✅ Parse valid Dockerfiles with FROM instructions
-- ✅ Update `python:3.13.11-alpine` to latest 3.13.x
-- ✅ Update `ghcr.io/astral-sh/uv:0.9.24` to latest 0.x.x
+- ✅ Update `python:3.13.0` to latest 3.13.x
+- ✅ Update `golang:1.22-alpine3.19` to latest matching pattern
 - ✅ Build Dockerfile and run HEALTHCHECK
 - ✅ Output summary of changes
 
 #### Test Cases:
 ```dockerfile
-# doner: python:3.13.#-alpine*
-FROM python:3.13.11-alpine3.21
+# Real-world example from elvish project
+# doner: golang:1.#.#-alpine*
+FROM golang:1.22-alpine3.19 as builder
 
-# doner: uv:0.#.#
-COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
+RUN apk add --no-cache --virtual build-deps make git
+
+# doner: alpine:3.#
+FROM alpine:3.19
 ```
 
 ---
@@ -297,22 +304,28 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
    - Include package manager in summary
 
 #### Success Criteria:
-- ✅ Query apk packages from running Alpine container
-- ✅ Update `apk add bash=5.2.15-r0` to latest
-- ✅ Update `pip install uv-build==0.9.24` from PyPI
+- ✅ Query package versions from running containers
+- ✅ Update package versions via apk, apt, pip, npm
 - ✅ Handle multi-package directives with exclusions
 - ✅ Build, validate, and rebuild after package updates
 
 #### Test Cases:
 ```dockerfile
-# doner: python:3.13.#-alpine*
-FROM python:3.13.11-alpine
+# Real-world examples from various projects
 
-# doner: bash:#.#.#, curl:#.#.#
-RUN apk add --no-cache bash=5.2.15-r0 curl=8.5.0-r0
+# Alpine-based with apk packages
+# doner: alpine:3.#
+FROM alpine:3.19
 
-# doner: uv-build:0.#.#
-RUN pip install "uv-build==0.9.24"
+# doner: bash:#.#.#, curl:#.#.#, git:ignore
+RUN apk add --no-cache bash=5.2.15-r0 curl=8.5.0-r0 git
+
+# Debian-based with apt packages
+# doner: debian:bookworm-*
+FROM debian:bookworm-slim
+
+# doner: wget:ignore, curl:#.#.#
+RUN apt-get update && apt-get install -y wget curl ca-certificates
 ```
 
 ---
@@ -616,94 +629,76 @@ type Resolver interface {
 
 ### Input Dockerfile
 
+Real-world example from [uv AWS Lambda integration](https://docs.astral.sh/uv/guides/integration/aws-lambda/):
+
 ```dockerfile
-# doner: python:3.13.#-alpine*
-FROM python:3.13.11-alpine3.21
+# doner: uv:0.9.#
+FROM ghcr.io/astral-sh/uv:0.9.24 AS uv
 
-# doner: uv:0.#.#
-COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
+# doner: python:3.13.#
+FROM public.ecr.aws/lambda/python:3.13 AS builder
 
-RUN addgroup -g 1000 workers && adduser -D -u 1000 -G workers workers
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_NO_INSTALLER_METADATA=1
+ENV UV_LINK_MODE=copy
 
-# doner: bash:#.#.#, curl:#.#.#, git:ignore
-RUN apk add --no-cache bash=5.2.15-r0 curl=8.5.0-r0 git
+RUN --mount=from=uv,source=/uv,target=/bin/uv \
+    --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv export --frozen --no-emit-workspace --no-dev --no-editable -o requirements.txt && \
+    uv pip install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
-# doner: uv-build:0.#.#
-RUN uv pip install "uv-build==0.9.24"
+# doner: python:3.13.#
+FROM public.ecr.aws/lambda/python:3.13
 
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD python -c "import workers; print('ok')"
+COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
+COPY ./app ${LAMBDA_TASK_ROOT}/app
+
+CMD ["app.main.handler"]
 ```
 
 ### Doner Execution
 
 ```bash
-$ doner update -f Dockerfile -v
+$ doner check -f test/fixtures/uv-lambda.Dockerfile
 
-🦌 Doner - Dockerfile Maintainer
-================================
+Parsed test/fixtures/uv-lambda.Dockerfile:
+  Instructions: 12
+  Directives:   2
 
-📄 Processing: Dockerfile
-
-🔍 Resolving versions...
-  ✓ python:3.13.# → 3.13.12 (was 3.13.11)
-  ✓ alpine* → alpine3.22 (was alpine3.21)
-  ✓ uv:0.#.# → 0.9.28 (was 0.9.24)
-
-🔨 Building image (attempt 1)...
-  ✓ Build successful (45.2s)
-
-✅ Running HEALTHCHECK...
-  ✓ HEALTHCHECK passed
-
-🔍 Querying package versions in container...
-  ✓ bash:5.2.15-r0 → 5.2.15-r5
-  ✓ curl:8.5.0-r0 → 8.11.1-r0
-  ⊘ git: ignored (directive)
-
-🔍 Resolving external packages...
-  ✓ uv-build:0.#.# → 0.9.28 (was 0.9.24)
-
-🔨 Building image (attempt 2)...
-  ✓ Build successful (12.3s)
-
-✅ Running HEALTHCHECK...
-  ✓ HEALTHCHECK passed
-
-📝 Summary:
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Package      Source   Old          New
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  python       docker   3.13.11      3.13.12
-  alpine       docker   3.21         3.22
-  uv           docker   0.9.24       0.9.28
-  bash         apk      5.2.15-r0    5.2.15-r5
-  curl         apk      8.5.0-r0     8.11.1-r0
-  uv-build     pypi     0.9.24       0.9.28
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✅ Dockerfile updated successfully!
+Checking for updates:
+  → python:3.13.0 AS builder -> 3.13.11
+  → python:3.13.0 -> 3.13.11
 ```
 
-### Output Dockerfile
+Future `doner update` would produce:
 
 ```dockerfile
-# doner: python:3.13.#-alpine*
-FROM python:3.13.12-alpine3.22
+# doner: uv:0.9.#
+FROM ghcr.io/astral-sh/uv:0.9.30 AS uv
 
-# doner: uv:0.#.#
-COPY --from=ghcr.io/astral-sh/uv:0.9.28 /uv /uvx /bin/
+# doner: python:3.13.#
+FROM public.ecr.aws/lambda/python:3.13.1 AS builder
 
-RUN addgroup -g 1000 workers && adduser -D -u 1000 -G workers workers
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_NO_INSTALLER_METADATA=1
+ENV UV_LINK_MODE=copy
 
-# doner: bash:#.#.#, curl:#.#.#, git:ignore
-RUN apk add --no-cache bash=5.2.15-r5 curl=8.11.1-r0 git
+RUN --mount=from=uv,source=/uv,target=/bin/uv \
+    --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv export --frozen --no-emit-workspace --no-dev --no-editable -o requirements.txt && \
+    uv pip install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
-# doner: uv-build:0.#.#
-RUN uv pip install "uv-build==0.9.28"
+# doner: python:3.13.#
+FROM public.ecr.aws/lambda/python:3.13.1
 
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD python -c "import workers; print('ok')"
+COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
+COPY ./app ${LAMBDA_TASK_ROOT}/app
+
+CMD ["app.main.handler"]
 ```
 
 ## Success Metrics

@@ -25,14 +25,14 @@ Download from [GitHub Releases](https://github.com/kyleking/doner/releases).
 ### CLI
 
 ```bash
-# Check for updates (dry-run)
+# Check for updates (dry-run, looks for ./Dockerfile by default)
 doner check
 
 # Check specific Dockerfile
-doner check -f workers/Dockerfile
+doner check -f docker/api/Dockerfile
 
-# Verbose output
-doner check -v
+# Test with example fixtures
+doner check -f test/fixtures/simple-python.Dockerfile
 ```
 
 ### GitHub Action
@@ -52,7 +52,7 @@ jobs:
       - uses: kyleking/doner@v1
         with:
           command: check
-          file: Dockerfile
+          file: docker/api/Dockerfile
 ```
 
 ## Comment Directive Syntax
@@ -60,14 +60,21 @@ jobs:
 Add directives above Dockerfile instructions to control version updates:
 
 ```dockerfile
-# doner: python:3.13.#-alpine*
-FROM python:3.13.11-alpine3.21
+# Example from https://docs.astral.sh/uv/guides/integration/aws-lambda/
 
-# doner: uv:0.#.#
-COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
+# doner: uv:0.9.#
+FROM ghcr.io/astral-sh/uv:0.9.26 AS uv
 
-# doner: bash:#.#.#, curl:#.#.#, git:ignore
-RUN apk add --no-cache bash=5.2.15-r0 curl=8.5.0-r0 git
+# doner: python:3.13.#
+FROM public.ecr.aws/lambda/python:3.13 AS builder
+
+# Example from https://github.com/elves/elvish
+
+# doner: golang:1.#.#-alpine*
+FROM golang:1.22-alpine3.19 as builder
+
+# doner: alpine:3.#
+FROM alpine:3.19
 ```
 
 ### Version Patterns

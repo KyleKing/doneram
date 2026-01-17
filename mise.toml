@@ -1,0 +1,43 @@
+[env]
+_.file = { path = ".env" }
+
+[tasks.format]
+description = "Format code"
+run = "go fmt ./..."
+sources = ['**/*.go', 'go.sum']
+
+[tasks.lint]
+depends = ["format"]
+description = "Run linters"
+run = "golangci-lint run"
+sources = ['**/*.go', 'go.sum']
+
+[tasks.build]
+depends = ["format"]
+description = "Build doner binary"
+run = "go build -o ./bin/doner ./cmd/doner"
+
+[tasks.test]
+depends = ["format", "lint"]
+description = "Run tests"
+run = "go test -coverprofile=coverage.out -coverpkg=./... ./..."
+sources = ['**/*.go', 'go.sum']
+
+[tasks.coverage]
+description = "View test coverage of most recent test run"
+run = "go tool cover -html=coverage.out"
+
+[tasks.install]
+description = "Install doner locally"
+run = "go install ./cmd/doner"
+
+[tasks.pre-push]
+depends = ["build", "test"]
+description = "Run all checks before pushing"
+
+[tasks.update]
+description = "Update go dependencies"
+run = ["go get -u .", "go mod tidy"]
+
+[tools]
+"go:github.com/golangci/golangci-lint/cmd/golangci-lint" = "latest"

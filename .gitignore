@@ -1,0 +1,24 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+coverage.out
+*.test
+
+# Environment
+.env
+
+# Mise
+.mise.local.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
