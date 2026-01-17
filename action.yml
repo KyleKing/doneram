@@ -1,0 +1,89 @@
+name: 'Doner - Dockerfile Maintainer'
+description: 'Automated Dockerfile version updater that validates changes via Docker build'
+author: 'kyleking'
+
+branding:
+  icon: 'package'
+  color: 'orange'
+
+inputs:
+  command:
+    description: 'Command to run (check, update)'
+    required: false
+    default: 'check'
+  file:
+    description: 'Path to Dockerfile'
+    required: false
+    default: 'Dockerfile'
+  config:
+    description: 'Path to .doner.yml config file'
+    required: false
+  verbose:
+    description: 'Enable verbose output'
+    required: false
+    default: 'false'
+  version:
+    description: 'Doner version to use (default: latest)'
+    required: false
+    default: 'latest'
+
+outputs:
+  updates-available:
+    description: 'Whether updates are available (true/false)'
+    value: ${{ steps.run.outputs.updates-available }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine version
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          VERSION=$(curl -s https://api.github.com/repos/kyleking/doner/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+        else
+          VERSION="${{ inputs.version }}"
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+    - name: Download doner
+      shell: bash
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        ARCH=$(uname -m)
+        case $ARCH in
+          x86_64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+        esac
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+        URL="https://github.com/kyleking/doner/releases/download/${VERSION}/doner_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+        echo "Downloading doner from: $URL"
+        curl -sL "$URL" | tar xz -C /usr/local/bin
+        chmod +x /usr/local/bin/doner
+
+    - name: Run doner
+      id: run
+      shell: bash
+      run: |
+        ARGS="${{ inputs.command }}"
+
+        if [ -n "${{ inputs.file }}" ]; then
+          ARGS="$ARGS -f ${{ inputs.file }}"
+        fi
+
+        if [ -n "${{ inputs.config }}" ]; then
+          ARGS="$ARGS -c ${{ inputs.config }}"
+        fi
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          ARGS="$ARGS -v"
+        fi
+
+        doner $ARGS
+
+        if [ $? -eq 0 ]; then
+          echo "updates-available=true" >> $GITHUB_OUTPUT
+        else
+          echo "updates-available=false" >> $GITHUB_OUTPUT
+        fi
