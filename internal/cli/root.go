@@ -22,6 +22,7 @@ func NewApp(version, commit, date string) *cli.Command {
 		},
 		Commands: []*cli.Command{
 			newCheckCommand(),
+			newUpdateCommand(),
 			newVersionCommand(version, commit, date),
 		},
 	}

@@ -33,6 +33,15 @@ doner check -f docker/api/Dockerfile
 
 # Test with example fixtures
 doner check -f test/fixtures/simple-python.Dockerfile
+
+# Update Dockerfile with latest versions and validate
+doner update -f Dockerfile
+
+# Update without Docker build validation
+doner update -f Dockerfile --skip-build
+
+# Update with build but skip healthcheck
+doner update -f Dockerfile --skip-healthcheck
 ```
 
 ### GitHub Action

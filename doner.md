@@ -151,8 +151,14 @@ doner check -f docker/api/Dockerfile
 # Test with example fixtures
 doner check -f test/fixtures/elvish.Dockerfile
 
-# Apply updates (future functionality)
+# Apply updates with build validation
 doner update -f Dockerfile
+
+# Apply updates without build validation
+doner update -f Dockerfile --skip-build
+
+# Apply updates with build but skip healthcheck
+doner update -f Dockerfile --skip-healthcheck
 
 # Apply updates and commit (future functionality)
 doner update -f Dockerfile --commit -m "chore: Update Docker dependencies"
@@ -207,40 +213,42 @@ jobs:
 
 ## Implementation Plan
 
-### Phase 1: Core Foundation (MVP)
+### Phase 1: Core Foundation (MVP) ✅ COMPLETE
 
 **Goal**: Parse Dockerfiles, update base images, validate with builds
 
+**Status**: All deliverables complete. The `check` and `update` commands are fully functional with Docker build validation and HEALTHCHECK support.
+
 #### Deliverables:
-1. **Project Setup**
+1. ✅ **Project Setup**
    - Go module initialization
-   - CLI framework (cobra)
+   - CLI framework (urfave/cli)
    - Project structure
    - Basic README and documentation
 
-2. **Dockerfile Parser**
+2. ✅ **Dockerfile Parser**
    - Parse Dockerfile instructions (FROM, COPY --from, RUN)
    - Extract doner directives from comments
    - Parse version patterns (wildcards)
    - Line-by-line instruction mapping
 
-3. **Docker Image Resolver**
+3. ✅ **Docker Image Resolver**
    - Docker Hub API client
    - GHCR API client
    - Version comparison/filtering
    - Pattern matching (3.13.#, alpine*)
 
-4. **Dockerfile Updater**
+4. ✅ **Dockerfile Updater**
    - In-memory Dockerfile modification
    - Preserve formatting and comments
    - Write updated Dockerfile to disk
 
-5. **Build Validator**
+5. ✅ **Build Validator**
    - Docker build execution
    - HEALTHCHECK extraction and execution
    - Error capture and reporting
 
-6. **Basic Reporter**
+6. ✅ **Basic Reporter**
    - Console output
    - Simple summary table
 
