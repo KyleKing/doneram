@@ -19,15 +19,20 @@ func newCheckCommand() *cli.Command {
 		Name:  "check",
 		Usage: "Check for available updates (dry-run)",
 		Flags: []cli.Flag{
-			&cli.StringFlag{
+			&cli.StringSliceFlag{
 				Name:    "file",
 				Aliases: []string{"f"},
-				Usage:   "path to Dockerfile (e.g., Dockerfile, docker/api/Dockerfile)",
+				Usage:   "path(s) to Dockerfile - supports globs (e.g., docker/*/Dockerfile, **/Dockerfile)",
 			},
 			&cli.StringFlag{
 				Name:  "format",
 				Usage: "output format: stdout, github-actions, json",
 				Value: "stdout",
+			},
+			&cli.IntFlag{
+				Name:  "workers",
+				Usage: "number of parallel workers",
+				Value: 4,
 			},
 		},
 		Action: runCheck,
@@ -35,28 +40,83 @@ func newCheckCommand() *cli.Command {
 }
 
 func runCheck(ctx context.Context, cmd *cli.Command) error {
-	file := cmd.String("file")
-	if file == "" {
-		file = "Dockerfile"
-	}
+	patterns := cmd.StringSlice("file")
 	verbose := cmd.Bool("verbose")
 	format := cmd.String("format")
+	workers := cmd.Int("workers")
+
+	// Expand file patterns
+	files, err := expandFiles(patterns)
+	if err != nil {
+		return err
+	}
 
 	rep := reporter.NewOutputReporter(format, verbose)
 
 	if verbose {
+		fmt.Printf("Checking %d file(s) for updates...\n", len(files))
+	}
+
+	// Process files in parallel
+	cfg := ProcessorConfig{
+		MaxWorkers: int(workers),
+		Verbose:    verbose,
+	}
+
+	results := processFilesParallel(ctx, files, cfg, processCheckFile)
+
+	// Report results sequentially
+	var totalUpdates, successCnt, failedCnt int
+	for _, result := range results {
+		if result.ProcessingErr != nil {
+			failedCnt++
+			if verbose || len(files) > 1 {
+				fmt.Printf("Error processing %s: %v\n", result.File, result.ProcessingErr)
+			}
+			continue
+		}
+
+		successCnt++
+		totalUpdates += len(result.Updates)
+		rep.ReportCheck(result.File, result.InstructionCnt, result.DirectiveCnt, result.Updates)
+	}
+
+	// Report summary for multi-file runs
+	if len(files) > 1 {
+		rep.ReportSummary(len(files), totalUpdates, successCnt, failedCnt)
+	}
+
+	if failedCnt > 0 {
+		return fmt.Errorf("%d of %d file(s) failed processing", failedCnt, len(files))
+	}
+
+	return nil
+}
+
+// processCheckFile processes a single Dockerfile and returns the result.
+func processCheckFile(ctx context.Context, file string, cfg ProcessorConfig) FileResult {
+	result := FileResult{
+		File: file,
+	}
+
+	if cfg.Verbose {
 		fmt.Printf("Checking %s for updates...\n", file)
 	}
 
 	content, err := os.ReadFile(file)
 	if err != nil {
-		return fmt.Errorf("reading dockerfile: %w", err)
+		result.ProcessingErr = fmt.Errorf("reading dockerfile: %w", err)
+		return result
 	}
 
 	df, err := parser.Parse(string(content))
 	if err != nil {
-		return fmt.Errorf("parsing dockerfile: %w", err)
+		result.ProcessingErr = fmt.Errorf("parsing dockerfile: %w", err)
+		return result
 	}
+
+	result.InstructionCnt = len(df.Instructions)
+	result.DirectiveCnt = len(df.Directives)
 
 	dockerHub := resolver.NewDockerHubResolver()
 	ghcr := resolver.NewGHCRResolver()
@@ -83,7 +143,7 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if err != nil {
-			if verbose {
+			if cfg.Verbose {
 				fmt.Printf("  Error: %v\n", err)
 			}
 			continue
@@ -95,12 +155,9 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// Create updates list
-	updates := updater.UpdateFromInstructions(df.Instructions, directiveMap, resolved)
+	result.Updates = updater.UpdateFromInstructions(df.Instructions, directiveMap, resolved)
 
-	// Report results
-	rep.ReportCheck(file, len(df.Instructions), len(df.Directives), updates)
-
-	return nil
+	return result
 }
 
 var imageRegex = regexp.MustCompile(`^([^:]+):(.+)$`)
