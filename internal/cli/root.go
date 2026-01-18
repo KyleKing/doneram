@@ -1,6 +1,11 @@
 package cli
 
 import (
+	"context"
+	"log/slog"
+	"os"
+
+	"github.com/kyleking/doner/internal/httpclient"
 	"github.com/urfave/cli/v3"
 )
 
@@ -9,10 +14,11 @@ func NewApp(version, commit, date string) *cli.Command {
 		Name:    "doner",
 		Usage:   "Dockerfile version maintainer",
 		Version: version,
+		Before:  setupLogging,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "verbose",
-				Usage: "verbose output",
+				Usage: "verbose output (debug logging)",
 			},
 		},
 		Commands: []*cli.Command{
@@ -21,4 +27,14 @@ func NewApp(version, commit, date string) *cli.Command {
 			newVersionCommand(version, commit, date),
 		},
 	}
+}
+
+func setupLogging(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+	level := slog.LevelInfo
+	if cmd.Bool("verbose") {
+		level = slog.LevelDebug
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	return httpclient.ContextWithLogger(ctx, logger), nil
 }

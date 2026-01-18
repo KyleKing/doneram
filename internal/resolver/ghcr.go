@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kyleking/doner/internal/httpclient"
 	"github.com/kyleking/doner/internal/parser"
 	"github.com/kyleking/doner/pkg/version"
 )
@@ -16,9 +17,9 @@ type GHCRResolver struct {
 	client *http.Client
 }
 
-func NewGHCRResolver() *GHCRResolver {
+func NewGHCRResolver(client *http.Client) *GHCRResolver {
 	return &GHCRResolver{
-		client: &http.Client{},
+		client: client,
 	}
 }
 
@@ -31,6 +32,9 @@ type ghcrTagsResponse struct {
 }
 
 func (r *GHCRResolver) Resolve(ctx context.Context, image string, pattern *parser.VersionPattern) (string, error) {
+	logger := httpclient.LoggerFromContext(ctx)
+	logger.Debug("resolving image", "resolver", "ghcr", "image", image)
+
 	image = strings.TrimPrefix(image, "ghcr.io/")
 
 	parts := strings.Split(image, "/")
@@ -50,12 +54,13 @@ func (r *GHCRResolver) Resolve(ctx context.Context, image string, pattern *parse
 
 	resp, err := r.client.Do(req)
 	if err != nil {
+		logger.Warn("failed to fetch tags", "image", image, "error", err)
 		return "", fmt.Errorf("fetching tags: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return "", fmt.Errorf("GHCR unavailable (status %d) for image %s: retry later", resp.StatusCode, image)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -76,10 +81,12 @@ func (r *GHCRResolver) Resolve(ctx context.Context, image string, pattern *parse
 	}
 
 	if len(matchingTags) == 0 {
-		return "", fmt.Errorf("no matching tags found for pattern %s", pattern.Raw)
+		return "", fmt.Errorf("no matching tags found for image %s with pattern %s", image, pattern.Raw)
 	}
 
-	return version.Latest(matchingTags), nil
+	latest := version.Latest(matchingTags)
+	logger.Info("resolved image", "resolver", "ghcr", "image", image, "version", latest)
+	return latest, nil
 }
 
 func (r *GHCRResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {

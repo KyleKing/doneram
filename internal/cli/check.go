@@ -2,11 +2,13 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 
+	"github.com/kyleking/doner/internal/httpclient"
 	"github.com/kyleking/doner/internal/parser"
 	"github.com/kyleking/doner/internal/reporter"
 	"github.com/kyleking/doner/internal/resolver"
@@ -95,13 +97,12 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 
 // processCheckFile processes a single Dockerfile and returns the result.
 func processCheckFile(ctx context.Context, file string, cfg ProcessorConfig) FileResult {
+	logger := httpclient.LoggerFromContext(ctx)
 	result := FileResult{
 		File: file,
 	}
 
-	if cfg.Verbose {
-		fmt.Printf("Checking %s for updates...\n", file)
-	}
+	logger.Info("checking file", "file", file, "format", "dockerfile")
 
 	content, err := os.ReadFile(file)
 	if err != nil {
@@ -118,8 +119,19 @@ func processCheckFile(ctx context.Context, file string, cfg ProcessorConfig) Fil
 	result.InstructionCnt = len(df.Instructions)
 	result.DirectiveCnt = len(df.Directives)
 
-	dockerHub := resolver.NewDockerHubResolver()
-	ghcr := resolver.NewGHCRResolver()
+	httpClient := httpclient.New(httpclient.DefaultConfig())
+	dockerHub := resolver.NewDockerHubResolver(httpClient)
+	ghcr := resolver.NewGHCRResolver(httpClient)
+
+	// Package manager resolvers (for future RUN instruction support)
+	_ = resolver.NewPyPIResolver(httpClient)
+	_ = resolver.NewNPMResolver(httpClient)
+	_ = resolver.NewAPKResolver(httpClient)
+	_ = resolver.NewAPTResolver(httpClient)
+	_ = resolver.NewCargoResolver(httpClient)
+	_ = resolver.NewRubyGemsResolver(httpClient)
+	_ = resolver.NewComposerResolver(httpClient)
+	_ = resolver.NewYumResolver(httpClient)
 
 	directiveMap := make(map[int]*parser.Directive)
 	for _, d := range df.Directives {
@@ -143,8 +155,15 @@ func processCheckFile(ctx context.Context, file string, cfg ProcessorConfig) Fil
 		}
 
 		if err != nil {
-			if cfg.Verbose {
-				fmt.Printf("  Error: %v\n", err)
+			var notFoundErr *httpclient.NotFoundError
+			var rateLimitErr *httpclient.RateLimitError
+
+			if errors.As(err, &notFoundErr) {
+				logger.Debug("resource not found", "error", err)
+			} else if errors.As(err, &rateLimitErr) {
+				logger.Warn("rate limit encountered", "error", err)
+			} else {
+				logger.Error("resolution failed", "error", err)
 			}
 			continue
 		}
@@ -156,6 +175,8 @@ func processCheckFile(ctx context.Context, file string, cfg ProcessorConfig) Fil
 
 	// Create updates list
 	result.Updates = updater.UpdateFromInstructions(df.Instructions, directiveMap, resolved)
+
+	logger.Info("check completed", "file", file, "updates_found", len(result.Updates))
 
 	return result
 }

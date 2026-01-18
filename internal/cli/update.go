@@ -2,11 +2,13 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/kyleking/doner/internal/builder"
+	"github.com/kyleking/doner/internal/httpclient"
 	"github.com/kyleking/doner/internal/parser"
 	"github.com/kyleking/doner/internal/reporter"
 	"github.com/kyleking/doner/internal/resolver"
@@ -118,9 +120,12 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 
 // processUpdateFile processes a single Dockerfile update and returns the result.
 func processUpdateFile(ctx context.Context, file string, cfg ProcessorConfig) FileResult {
+	logger := httpclient.LoggerFromContext(ctx)
 	result := FileResult{
 		File: file,
 	}
+
+	logger.Info("updating file", "file", file, "format", "dockerfile")
 
 	// Parse Dockerfile
 	content, err := os.ReadFile(file)
@@ -139,8 +144,19 @@ func processUpdateFile(ctx context.Context, file string, cfg ProcessorConfig) Fi
 	result.DirectiveCnt = len(df.Directives)
 
 	// Create resolvers
-	dockerHub := resolver.NewDockerHubResolver()
-	ghcr := resolver.NewGHCRResolver()
+	httpClient := httpclient.New(httpclient.DefaultConfig())
+	dockerHub := resolver.NewDockerHubResolver(httpClient)
+	ghcr := resolver.NewGHCRResolver(httpClient)
+
+	// Package manager resolvers (for future RUN instruction support)
+	_ = resolver.NewPyPIResolver(httpClient)
+	_ = resolver.NewNPMResolver(httpClient)
+	_ = resolver.NewAPKResolver(httpClient)
+	_ = resolver.NewAPTResolver(httpClient)
+	_ = resolver.NewCargoResolver(httpClient)
+	_ = resolver.NewRubyGemsResolver(httpClient)
+	_ = resolver.NewComposerResolver(httpClient)
+	_ = resolver.NewYumResolver(httpClient)
 
 	// Build directive map
 	directiveMap := make(map[int]*parser.Directive)
@@ -164,8 +180,15 @@ func processUpdateFile(ctx context.Context, file string, cfg ProcessorConfig) Fi
 		}
 
 		if err != nil {
-			if cfg.Verbose {
-				fmt.Printf("  Warning: %v\n", err)
+			var notFoundErr *httpclient.NotFoundError
+			var rateLimitErr *httpclient.RateLimitError
+
+			if errors.As(err, &notFoundErr) {
+				logger.Debug("resource not found", "error", err)
+			} else if errors.As(err, &rateLimitErr) {
+				logger.Warn("rate limit encountered", "error", err)
+			} else {
+				logger.Error("resolution failed", "error", err)
 			}
 			continue
 		}
@@ -179,8 +202,11 @@ func processUpdateFile(ctx context.Context, file string, cfg ProcessorConfig) Fi
 	result.Updates = updater.UpdateFromInstructions(df.Instructions, directiveMap, resolved)
 
 	if len(result.Updates) == 0 {
+		logger.Info("update completed", "file", file, "updates_found", 0)
 		return result
 	}
+
+	logger.Info("updates found", "file", file, "count", len(result.Updates))
 
 	// Apply updates
 	u := updater.NewUpdater(string(content))
@@ -194,6 +220,8 @@ func processUpdateFile(ctx context.Context, file string, cfg ProcessorConfig) Fi
 		result.ProcessingErr = fmt.Errorf("writing updated dockerfile: %w", err)
 		return result
 	}
+
+	logger.Info("update completed", "file", file, "updates_applied", len(result.Updates))
 
 	// Build and validate if not skipped
 	if !cfg.SkipBuild {

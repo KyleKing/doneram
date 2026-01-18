@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kyleking/doner/internal/httpclient"
 	"github.com/kyleking/doner/internal/parser"
 	"github.com/kyleking/doner/pkg/version"
 )
@@ -16,9 +17,9 @@ type DockerHubResolver struct {
 	client *http.Client
 }
 
-func NewDockerHubResolver() *DockerHubResolver {
+func NewDockerHubResolver(client *http.Client) *DockerHubResolver {
 	return &DockerHubResolver{
-		client: &http.Client{},
+		client: client,
 	}
 }
 
@@ -36,6 +37,9 @@ type dockerHubResult struct {
 }
 
 func (r *DockerHubResolver) Resolve(ctx context.Context, image string, pattern *parser.VersionPattern) (string, error) {
+	logger := httpclient.LoggerFromContext(ctx)
+	logger.Debug("resolving image", "resolver", "dockerhub", "image", image)
+
 	namespace, repo := parseDockerImage(image)
 
 	url := fmt.Sprintf("https://registry.hub.docker.com/v2/repositories/%s/%s/tags?page_size=100", namespace, repo)
@@ -47,12 +51,13 @@ func (r *DockerHubResolver) Resolve(ctx context.Context, image string, pattern *
 
 	resp, err := r.client.Do(req)
 	if err != nil {
+		logger.Warn("failed to fetch tags", "image", image, "error", err)
 		return "", fmt.Errorf("fetching tags: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return "", fmt.Errorf("Docker Hub unavailable (status %d) for image %s: retry later", resp.StatusCode, image)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -73,10 +78,12 @@ func (r *DockerHubResolver) Resolve(ctx context.Context, image string, pattern *
 	}
 
 	if len(matchingTags) == 0 {
-		return "", fmt.Errorf("no matching tags found for pattern %s", pattern.Raw)
+		return "", fmt.Errorf("no matching tags found for image %s with pattern %s", image, pattern.Raw)
 	}
 
-	return version.Latest(matchingTags), nil
+	latest := version.Latest(matchingTags)
+	logger.Info("resolved image", "resolver", "dockerhub", "image", image, "version", latest)
+	return latest, nil
 }
 
 func (r *DockerHubResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {

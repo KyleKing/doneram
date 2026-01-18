@@ -1,0 +1,9 @@
+{
+  "versions": [
+    {"num": "13.0.0", "yanked": false},
+    {"num": "14.0.0", "yanked": false},
+    {"num": "14.1.0", "yanked": false},
+    {"num": "14.1.1", "yanked": true},
+    {"num": "14.2.0", "yanked": false}
+  ]
+}

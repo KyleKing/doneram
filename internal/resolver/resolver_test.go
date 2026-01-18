@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/kyleking/doner/internal/parser"
@@ -12,7 +13,7 @@ func TestPyPIResolver_Resolve(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	r := NewPyPIResolver()
+	r := NewPyPIResolver(&http.Client{})
 	ctx := context.Background()
 
 	tests := []struct {
@@ -63,7 +64,7 @@ func TestNPMResolver_Resolve(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	r := NewNPMResolver()
+	r := NewNPMResolver(&http.Client{})
 	ctx := context.Background()
 
 	tests := []struct {
@@ -114,7 +115,7 @@ func TestAPKResolver_Resolve(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	r := NewAPKResolver()
+	r := NewAPKResolver(&http.Client{})
 	ctx := context.Background()
 
 	tests := []struct {
@@ -159,7 +160,7 @@ func TestAPTResolver_Resolve(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	r := NewAPTResolver()
+	r := NewAPTResolver(&http.Client{})
 	ctx := context.Background()
 
 	tests := []struct {

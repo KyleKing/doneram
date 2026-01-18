@@ -1,0 +1,7 @@
+[
+  {"version": "7.76.1-14", "status": "newest", "repo": "fedora_37"},
+  {"version": "7.76.1-15", "status": "newest", "repo": "fedora_38"},
+  {"version": "8.0.1-1", "status": "newest", "repo": "fedora_39"},
+  {"version": "8.1.0-1", "status": "newest", "repo": "fedora_40"},
+  {"version": "8.2.0-1", "status": "newest", "repo": "centos_stream_9"}
+]

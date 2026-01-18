@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/kyleking/doner/internal/httpclient"
 	"github.com/kyleking/doner/internal/parser"
 	"github.com/kyleking/doner/pkg/version"
 )
@@ -15,9 +16,9 @@ type NPMResolver struct {
 	client *http.Client
 }
 
-func NewNPMResolver() *NPMResolver {
+func NewNPMResolver(client *http.Client) *NPMResolver {
 	return &NPMResolver{
-		client: &http.Client{},
+		client: client,
 	}
 }
 
@@ -30,6 +31,9 @@ type npmResponse struct {
 }
 
 func (r *NPMResolver) Resolve(ctx context.Context, pkg string, pattern *parser.VersionPattern) (string, error) {
+	logger := httpclient.LoggerFromContext(ctx)
+	logger.Debug("resolving package", "resolver", "npm", "package", pkg)
+
 	url := fmt.Sprintf("https://registry.npmjs.org/%s", pkg)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -39,12 +43,13 @@ func (r *NPMResolver) Resolve(ctx context.Context, pkg string, pattern *parser.V
 
 	resp, err := r.client.Do(req)
 	if err != nil {
+		logger.Warn("failed to fetch npm data", "package", pkg, "error", err)
 		return "", fmt.Errorf("fetching npm data: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("npm returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("npm registry unavailable (status %d) for package %s: retry later", resp.StatusCode, pkg)
 	}
 
 	var data npmResponse
@@ -63,11 +68,12 @@ func (r *NPMResolver) Resolve(ctx context.Context, pkg string, pattern *parser.V
 
 	for i := len(versions) - 1; i >= 0; i-- {
 		if pattern.Matches(versions[i]) {
+			logger.Info("resolved package", "resolver", "npm", "package", pkg, "version", versions[i])
 			return versions[i], nil
 		}
 	}
 
-	return "", fmt.Errorf("no matching version found")
+	return "", fmt.Errorf("no matching version found for package %s with pattern %v", pkg, pattern)
 }
 
 func (r *NPMResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {
