@@ -13,12 +13,21 @@ import (
 )
 
 type PyPIResolver struct {
-	client *http.Client
+	client  *http.Client
+	baseURL string
 }
 
 func NewPyPIResolver(client *http.Client) *PyPIResolver {
 	return &PyPIResolver{
-		client: client,
+		client:  client,
+		baseURL: "https://pypi.org",
+	}
+}
+
+func NewPyPIResolverWithBaseURL(client *http.Client, baseURL string) *PyPIResolver {
+	return &PyPIResolver{
+		client:  client,
+		baseURL: baseURL,
 	}
 }
 
@@ -34,7 +43,7 @@ func (r *PyPIResolver) Resolve(ctx context.Context, pkg string, pattern *parser.
 	logger := httpclient.LoggerFromContext(ctx)
 	logger.Debug("resolving package", "resolver", "pypi", "package", pkg)
 
-	url := fmt.Sprintf("https://pypi.org/pypi/%s/json", pkg)
+	url := fmt.Sprintf("%s/pypi/%s/json", r.baseURL, pkg)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

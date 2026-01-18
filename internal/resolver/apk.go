@@ -15,12 +15,21 @@ import (
 )
 
 type APKResolver struct {
-	client *http.Client
+	client  *http.Client
+	baseURL string
 }
 
 func NewAPKResolver(client *http.Client) *APKResolver {
 	return &APKResolver{
-		client: client,
+		client:  client,
+		baseURL: "https://repology.org",
+	}
+}
+
+func NewAPKResolverWithBaseURL(client *http.Client, baseURL string) *APKResolver {
+	return &APKResolver{
+		client:  client,
+		baseURL: baseURL,
 	}
 }
 
@@ -38,7 +47,7 @@ func (r *APKResolver) Resolve(ctx context.Context, pkg string, pattern *parser.V
 	logger := httpclient.LoggerFromContext(ctx)
 	logger.Debug("resolving package", "resolver", "apk", "package", pkg)
 
-	url := fmt.Sprintf("https://repology.org/api/v1/project/%s", pkg)
+	url := fmt.Sprintf("%s/api/v1/project/%s", r.baseURL, pkg)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

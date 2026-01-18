@@ -13,12 +13,21 @@ import (
 )
 
 type NPMResolver struct {
-	client *http.Client
+	client  *http.Client
+	baseURL string
 }
 
 func NewNPMResolver(client *http.Client) *NPMResolver {
 	return &NPMResolver{
-		client: client,
+		client:  client,
+		baseURL: "https://registry.npmjs.org",
+	}
+}
+
+func NewNPMResolverWithBaseURL(client *http.Client, baseURL string) *NPMResolver {
+	return &NPMResolver{
+		client:  client,
+		baseURL: baseURL,
 	}
 }
 
@@ -34,7 +43,7 @@ func (r *NPMResolver) Resolve(ctx context.Context, pkg string, pattern *parser.V
 	logger := httpclient.LoggerFromContext(ctx)
 	logger.Debug("resolving package", "resolver", "npm", "package", pkg)
 
-	url := fmt.Sprintf("https://registry.npmjs.org/%s", pkg)
+	url := fmt.Sprintf("%s/%s", r.baseURL, pkg)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
