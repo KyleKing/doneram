@@ -188,7 +188,7 @@ func TestGitHubActionsReporter_ReportValidation_Error(t *testing.T) {
 func TestNewGitHubActionsReporter(t *testing.T) {
 	r := NewGitHubActionsReporter(true)
 	if r == nil {
-		t.Error("NewGitHubActionsReporter returned nil")
+		t.Fatal("NewGitHubActionsReporter returned nil")
 	}
 	if !r.verbose {
 		t.Error("verbose should be true")

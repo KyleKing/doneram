@@ -55,7 +55,7 @@ func (r *NPMResolver) Resolve(ctx context.Context, pkg string, pattern *parser.V
 		logger.Warn("failed to fetch npm data", "package", pkg, "error", err)
 		return "", fmt.Errorf("fetching npm data: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("npm registry unavailable (status %d) for package %s: retry later", resp.StatusCode, pkg)

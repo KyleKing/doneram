@@ -6,11 +6,11 @@ import (
 
 func TestParse_SemVer(t *testing.T) {
 	tests := []struct {
-		input       string
-		wantMajor   int
-		wantMinor   int
-		wantPatch   int
-		wantSuffix  string
+		input      string
+		wantMajor  int
+		wantMinor  int
+		wantPatch  int
+		wantSuffix string
 	}{
 		{"1.2.3", 1, 2, 3, ""},
 		{"0.0.0", 0, 0, 0, ""},
@@ -45,11 +45,11 @@ func TestParse_SemVer(t *testing.T) {
 
 func TestParse_WithSuffix(t *testing.T) {
 	tests := []struct {
-		input       string
-		wantMajor   int
-		wantMinor   int
-		wantPatch   int
-		wantSuffix  string
+		input      string
+		wantMajor  int
+		wantMinor  int
+		wantPatch  int
+		wantSuffix string
 	}{
 		{"1.2.3-alpha", 1, 2, 3, "alpha"},
 		{"1.2.3-beta", 1, 2, 3, "beta"},
@@ -80,10 +80,10 @@ func TestParse_WithSuffix(t *testing.T) {
 
 func TestParse_PartialVersions(t *testing.T) {
 	tests := []struct {
-		input       string
-		wantMajor   int
-		wantMinor   int
-		wantPatch   int
+		input     string
+		wantMajor int
+		wantMinor int
+		wantPatch int
 	}{
 		{"1.2", 1, 2, 0},
 		{"1", 1, 0, 0},
@@ -121,7 +121,7 @@ func TestParse_InvalidVersions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := Parse(tt.input)
 			if v == nil {
-				t.Error("Parse() returned nil")
+				t.Fatal("Parse() returned nil")
 			}
 			if v.Raw != tt.input {
 				t.Errorf("Raw = %s, want %s", v.Raw, tt.input)

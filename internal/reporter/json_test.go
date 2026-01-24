@@ -213,7 +213,7 @@ func TestJSONReporter_ReportValidation_Error(t *testing.T) {
 func TestNewJSONReporter(t *testing.T) {
 	r := NewJSONReporter(true)
 	if r == nil {
-		t.Error("NewJSONReporter returned nil")
+		t.Fatal("NewJSONReporter returned nil")
 	}
 	if !r.verbose {
 		t.Error("verbose should be true")

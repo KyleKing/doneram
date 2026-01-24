@@ -66,7 +66,7 @@ func (r *ComposerResolver) Resolve(ctx context.Context, pkg string, pattern *par
 		logger.Warn("failed to fetch Packagist data", "package", pkg, "error", err)
 		return "", fmt.Errorf("fetching Packagist data: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("Packagist unavailable (status %d) for package %s: retry later", resp.StatusCode, pkg)

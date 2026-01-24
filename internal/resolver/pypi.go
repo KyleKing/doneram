@@ -55,7 +55,7 @@ func (r *PyPIResolver) Resolve(ctx context.Context, pkg string, pattern *parser.
 		logger.Warn("failed to fetch PyPI data", "package", pkg, "error", err)
 		return "", fmt.Errorf("fetching PyPI data: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("PyPI registry unavailable (status %d) for package %s: retry later", resp.StatusCode, pkg)
