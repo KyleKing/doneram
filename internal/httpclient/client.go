@@ -60,7 +60,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		if resp.StatusCode == http.StatusNotFound {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil, &NotFoundError{Resource: req.URL.String()}
 		}
 
@@ -73,7 +73,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			logger.Warn("rate limit hit",
 				"url", req.URL.String(),
 				"retry_after", retryAfter)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			lastErr = &RateLimitError{
 				StatusCode: resp.StatusCode,
 				RetryAfter: retryAfter,
@@ -89,7 +89,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			continue
 		}
 
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
