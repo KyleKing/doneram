@@ -2,6 +2,7 @@ package reporter
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -9,6 +10,15 @@ import (
 )
 
 func TestGitHubActionsReporter_ReportCheck_NoUpdates(t *testing.T) {
+	// Unset GITHUB_STEP_SUMMARY to ensure output goes to stdout
+	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
+	os.Unsetenv("GITHUB_STEP_SUMMARY")
+	defer func() {
+		if oldSummary != "" {
+			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
+		}
+	}()
+
 	r := NewGitHubActionsReporter(false)
 
 	output := captureOutput(func() {
@@ -21,6 +31,15 @@ func TestGitHubActionsReporter_ReportCheck_NoUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportCheck_WithUpdates(t *testing.T) {
+	// Unset GITHUB_STEP_SUMMARY to ensure output goes to stdout
+	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
+	os.Unsetenv("GITHUB_STEP_SUMMARY")
+	defer func() {
+		if oldSummary != "" {
+			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
+		}
+	}()
+
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
 		{
@@ -56,6 +75,15 @@ func TestGitHubActionsReporter_ReportCheck_WithUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_NoUpdates(t *testing.T) {
+	// Unset GITHUB_STEP_SUMMARY to ensure output goes to stdout
+	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
+	os.Unsetenv("GITHUB_STEP_SUMMARY")
+	defer func() {
+		if oldSummary != "" {
+			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
+		}
+	}()
+
 	r := NewGitHubActionsReporter(false)
 
 	output := captureOutput(func() {
@@ -71,6 +99,15 @@ func TestGitHubActionsReporter_ReportUpdate_NoUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_Success(t *testing.T) {
+	// Unset GITHUB_STEP_SUMMARY to ensure output goes to stdout
+	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
+	os.Unsetenv("GITHUB_STEP_SUMMARY")
+	defer func() {
+		if oldSummary != "" {
+			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
+		}
+	}()
+
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
 		{
@@ -94,6 +131,15 @@ func TestGitHubActionsReporter_ReportUpdate_Success(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_BuildError(t *testing.T) {
+	// Unset GITHUB_STEP_SUMMARY to ensure output goes to stdout
+	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
+	os.Unsetenv("GITHUB_STEP_SUMMARY")
+	defer func() {
+		if oldSummary != "" {
+			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
+		}
+	}()
+
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
 		{
@@ -117,6 +163,15 @@ func TestGitHubActionsReporter_ReportUpdate_BuildError(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportSummary(t *testing.T) {
+	// Unset GITHUB_STEP_SUMMARY to ensure output goes to stdout
+	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
+	os.Unsetenv("GITHUB_STEP_SUMMARY")
+	defer func() {
+		if oldSummary != "" {
+			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
+		}
+	}()
+
 	r := NewGitHubActionsReporter(false)
 
 	output := captureOutput(func() {
