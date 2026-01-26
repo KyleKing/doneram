@@ -116,7 +116,7 @@ func (r *GitHubActionsReporter) writeToSummary(content string) {
 		fmt.Print(content)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := f.WriteString(content); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Could not write to GITHUB_STEP_SUMMARY: %v\n", err)

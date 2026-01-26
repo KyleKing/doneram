@@ -57,7 +57,7 @@ func (r *GHCRResolver) Resolve(ctx context.Context, image string, pattern *parse
 		logger.Warn("failed to fetch tags", "image", image, "error", err)
 		return "", fmt.Errorf("fetching tags: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GHCR unavailable (status %d) for image %s: retry later", resp.StatusCode, image)

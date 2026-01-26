@@ -57,7 +57,7 @@ func (r *RubyGemsResolver) Resolve(ctx context.Context, gem string, pattern *par
 		logger.Warn("failed to fetch RubyGems data", "gem", gem, "error", err)
 		return "", fmt.Errorf("fetching RubyGems data: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("RubyGems unavailable (status %d) for gem %s: retry later", resp.StatusCode, gem)

@@ -2,13 +2,28 @@ package reporter
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/kyleking/doner/internal/updater"
 )
 
+// withoutGitHubStepSummary temporarily unsets GITHUB_STEP_SUMMARY for testing
+func withoutGitHubStepSummary(t *testing.T) func() {
+	t.Helper()
+	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
+	os.Unsetenv("GITHUB_STEP_SUMMARY")
+	return func() {
+		if oldSummary != "" {
+			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
+		}
+	}
+}
+
 func TestGitHubActionsReporter_ReportCheck_NoUpdates(t *testing.T) {
+	defer withoutGitHubStepSummary(t)()
+
 	r := NewGitHubActionsReporter(false)
 
 	output := captureOutput(func() {
@@ -21,6 +36,8 @@ func TestGitHubActionsReporter_ReportCheck_NoUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportCheck_WithUpdates(t *testing.T) {
+	defer withoutGitHubStepSummary(t)()
+
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
 		{
@@ -56,6 +73,8 @@ func TestGitHubActionsReporter_ReportCheck_WithUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_NoUpdates(t *testing.T) {
+	defer withoutGitHubStepSummary(t)()
+
 	r := NewGitHubActionsReporter(false)
 
 	output := captureOutput(func() {
@@ -71,6 +90,8 @@ func TestGitHubActionsReporter_ReportUpdate_NoUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_Success(t *testing.T) {
+	defer withoutGitHubStepSummary(t)()
+
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
 		{
@@ -94,6 +115,8 @@ func TestGitHubActionsReporter_ReportUpdate_Success(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_BuildError(t *testing.T) {
+	defer withoutGitHubStepSummary(t)()
+
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
 		{
@@ -117,6 +140,8 @@ func TestGitHubActionsReporter_ReportUpdate_BuildError(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportSummary(t *testing.T) {
+	defer withoutGitHubStepSummary(t)()
+
 	r := NewGitHubActionsReporter(false)
 
 	output := captureOutput(func() {
@@ -188,7 +213,7 @@ func TestGitHubActionsReporter_ReportValidation_Error(t *testing.T) {
 func TestNewGitHubActionsReporter(t *testing.T) {
 	r := NewGitHubActionsReporter(true)
 	if r == nil {
-		t.Error("NewGitHubActionsReporter returned nil")
+		t.Fatal("NewGitHubActionsReporter returned nil")
 	}
 	if !r.verbose {
 		t.Error("verbose should be true")

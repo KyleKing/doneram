@@ -5,8 +5,9 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/kyleking/doner/internal/httpclient"
 	"github.com/urfave/cli/v3"
+
+	"github.com/kyleking/doner/internal/httpclient"
 )
 
 func NewApp(version, commit, date string) *cli.Command {

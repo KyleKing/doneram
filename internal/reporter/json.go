@@ -18,7 +18,7 @@ func NewJSONReporter(verbose bool) *JSONReporter {
 }
 
 type CheckResult struct {
-	File            string            `json:"file"`
+	File             string           `json:"file"`
 	InstructionCount int              `json:"instruction_count"`
 	DirectiveCount   int              `json:"directive_count"`
 	Updates          []updater.Update `json:"updates"`
@@ -26,7 +26,7 @@ type CheckResult struct {
 }
 
 type UpdateResult struct {
-	File         string            `json:"file"`
+	File         string           `json:"file"`
 	Updates      []updater.Update `json:"updates"`
 	UpdateCount  int              `json:"update_count"`
 	BuildSuccess bool             `json:"build_success"`
@@ -42,7 +42,7 @@ type SummaryResult struct {
 
 func (r *JSONReporter) ReportCheck(file string, instructionCount, directiveCount int, updates []updater.Update) {
 	result := CheckResult{
-		File:            file,
+		File:             file,
 		InstructionCount: instructionCount,
 		DirectiveCount:   directiveCount,
 		Updates:          updates,

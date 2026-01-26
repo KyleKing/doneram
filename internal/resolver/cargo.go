@@ -62,7 +62,7 @@ func (r *CargoResolver) Resolve(ctx context.Context, crate string, pattern *pars
 		logger.Warn("failed to fetch crates.io data", "crate", crate, "error", err)
 		return "", fmt.Errorf("fetching crates.io data: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("crates.io unavailable (status %d) for crate %s: retry later", resp.StatusCode, crate)

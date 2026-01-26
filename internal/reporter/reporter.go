@@ -102,9 +102,7 @@ func (r *Reporter) ReportValidation(imageID string, success bool, err error) {
 }
 
 func truncateImageID(imageID string) string {
-	if strings.HasPrefix(imageID, "sha256:") {
-		imageID = imageID[7:]
-	}
+	imageID = strings.TrimPrefix(imageID, "sha256:")
 	if len(imageID) > 12 {
 		return imageID[:12]
 	}

@@ -22,7 +22,7 @@ func TestRetryTransport_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if attempts != 1 {
 		t.Errorf("expected 1 attempt, got %d", attempts)
@@ -49,7 +49,7 @@ func TestRetryTransport_RetryOn500(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if attempts != 3 {
 		t.Errorf("expected 3 attempts, got %d", attempts)
@@ -80,7 +80,7 @@ func TestRetryTransport_RateLimitWithRetryAfter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if attempts != 2 {
 		t.Errorf("expected 2 attempts, got %d", attempts)
