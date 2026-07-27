@@ -205,3 +205,31 @@ func TestNewOutputReporter(t *testing.T) {
 		})
 	}
 }
+
+func TestReporter_ReportValidation(t *testing.T) {
+	r := NewReporter(false)
+
+	success := captureOutput(func() {
+		r.ReportValidation("sha256:0123456789abcdef0123", true, nil)
+	})
+	if !strings.Contains(success, "Validation successful") {
+		t.Errorf("output = %q, want a success message", success)
+	}
+	if !strings.Contains(success, "0123456789ab") || strings.Contains(success, "sha256:") {
+		t.Errorf("output = %q, want a truncated image ID", success)
+	}
+
+	failure := captureOutput(func() {
+		r.ReportValidation("sha256:abc", false, errors.New("healthcheck timed out"))
+	})
+	if !strings.Contains(failure, "healthcheck timed out") {
+		t.Errorf("output = %q, want the failure reason", failure)
+	}
+
+	quiet := captureOutput(func() {
+		r.ReportValidation("sha256:abc", false, nil)
+	})
+	if quiet != "" {
+		t.Errorf("output = %q, want no output when validation fails without an error", quiet)
+	}
+}

@@ -1,0 +1,11 @@
+See freshness/checkers.py in yak-shears and now calcipy-template
+
+This repository *could* be more general (could rename?)
+
+## 2026-07-27 (freshen)
+
+- action.yml passes `-c ${{ inputs.config }}` but neither check nor update defines a config flag, so setting the input makes the composite action fail
+- internal/builder sits at 29.8% coverage because Build/Validate/Cleanup shell out to `docker` with no seam; extracting a command runner interface would let the 80% gate rise
+- .goreleaser.yml uses `archives.format`, deprecated in goreleaser v2 in favour of `formats`; release.yml pins `~> v2` so it still works, but it will break at v3
+- actions/checkout is on v4 and actions/setup-go on v5 in both workflows, one major behind
+- consider pinning `go` in mise.toml so local runs match the 1.23 CI toolchain; the mismatch is why golangci-lint could not run locally at first
