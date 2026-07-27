@@ -3,26 +3,21 @@ package reporter
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/kyleking/doner/internal/updater"
 )
 
-// withoutGitHubStepSummary temporarily unsets GITHUB_STEP_SUMMARY for testing
-func withoutGitHubStepSummary(t *testing.T) func() {
+// withoutGitHubStepSummary blanks GITHUB_STEP_SUMMARY for the duration of the test
+func withoutGitHubStepSummary(t *testing.T) {
 	t.Helper()
-	oldSummary := os.Getenv("GITHUB_STEP_SUMMARY")
-	os.Unsetenv("GITHUB_STEP_SUMMARY")
-	return func() {
-		if oldSummary != "" {
-			os.Setenv("GITHUB_STEP_SUMMARY", oldSummary)
-		}
-	}
+	t.Setenv("GITHUB_STEP_SUMMARY", "")
 }
 
 func TestGitHubActionsReporter_ReportCheck_NoUpdates(t *testing.T) {
-	defer withoutGitHubStepSummary(t)()
+	withoutGitHubStepSummary(t)
 
 	r := NewGitHubActionsReporter(false)
 
@@ -36,7 +31,7 @@ func TestGitHubActionsReporter_ReportCheck_NoUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportCheck_WithUpdates(t *testing.T) {
-	defer withoutGitHubStepSummary(t)()
+	withoutGitHubStepSummary(t)
 
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
@@ -73,7 +68,7 @@ func TestGitHubActionsReporter_ReportCheck_WithUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_NoUpdates(t *testing.T) {
-	defer withoutGitHubStepSummary(t)()
+	withoutGitHubStepSummary(t)
 
 	r := NewGitHubActionsReporter(false)
 
@@ -90,7 +85,7 @@ func TestGitHubActionsReporter_ReportUpdate_NoUpdates(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_Success(t *testing.T) {
-	defer withoutGitHubStepSummary(t)()
+	withoutGitHubStepSummary(t)
 
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
@@ -115,7 +110,7 @@ func TestGitHubActionsReporter_ReportUpdate_Success(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportUpdate_BuildError(t *testing.T) {
-	defer withoutGitHubStepSummary(t)()
+	withoutGitHubStepSummary(t)
 
 	r := NewGitHubActionsReporter(false)
 	updates := []updater.Update{
@@ -140,7 +135,7 @@ func TestGitHubActionsReporter_ReportUpdate_BuildError(t *testing.T) {
 }
 
 func TestGitHubActionsReporter_ReportSummary(t *testing.T) {
-	defer withoutGitHubStepSummary(t)()
+	withoutGitHubStepSummary(t)
 
 	r := NewGitHubActionsReporter(false)
 
@@ -217,5 +212,36 @@ func TestNewGitHubActionsReporter(t *testing.T) {
 	}
 	if !r.verbose {
 		t.Error("verbose should be true")
+	}
+}
+
+func TestGitHubActionsReporter_WritesToStepSummaryFile(t *testing.T) {
+	summary := filepath.Join(t.TempDir(), "summary.md")
+	t.Setenv("GITHUB_STEP_SUMMARY", summary)
+
+	r := NewGitHubActionsReporter(false)
+	r.ReportCheck("Dockerfile", 5, 2, []updater.Update{
+		{Package: "python", OldVersion: "3.11.0", NewVersion: "3.11.5", Source: "dockerhub"},
+	})
+
+	written, err := os.ReadFile(summary)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(written), "python") {
+		t.Errorf("step summary = %q, want the package name", written)
+	}
+}
+
+func TestGitHubActionsReporter_FallsBackWhenSummaryUnwritable(t *testing.T) {
+	t.Setenv("GITHUB_STEP_SUMMARY", filepath.Join(t.TempDir(), "missing-dir", "summary.md"))
+
+	r := NewGitHubActionsReporter(false)
+	output := captureOutput(func() {
+		r.ReportCheck("Dockerfile", 5, 2, []updater.Update{})
+	})
+
+	if !strings.Contains(output, "No updates available") {
+		t.Errorf("output = %q, want the report printed to stdout as a fallback", output)
 	}
 }

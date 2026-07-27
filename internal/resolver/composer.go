@@ -69,7 +69,7 @@ func (r *ComposerResolver) Resolve(ctx context.Context, pkg string, pattern *par
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Packagist unavailable (status %d) for package %s: retry later", resp.StatusCode, pkg)
+		return "", fmt.Errorf("fetching Packagist data: unavailable (status %d) for package %s, retry later", resp.StatusCode, pkg)
 	}
 
 	var data composerResponse

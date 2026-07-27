@@ -40,4 +40,4 @@ description = "Update go dependencies"
 run = ["go get -u .", "go mod tidy"]
 
 [tools]
-"go:github.com/golangci/golangci-lint/cmd/golangci-lint" = "latest"
+"go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "2.12.2"

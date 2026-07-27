@@ -56,7 +56,7 @@ func (r *YumResolver) Resolve(ctx context.Context, pkg string, pattern *parser.V
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Repology unavailable (status %d) for package %s: retry later", resp.StatusCode, pkg)
+		return "", fmt.Errorf("fetching Repology data: unavailable (status %d) for package %s, retry later", resp.StatusCode, pkg)
 	}
 
 	var packages []repologyPackage

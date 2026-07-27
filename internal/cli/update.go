@@ -174,9 +174,10 @@ func processUpdateFile(ctx context.Context, file string, cfg ProcessorConfig) Fi
 		}
 
 		var latest string
-		if instr.Command == "FROM" {
+		switch instr.Command {
+		case "FROM":
 			latest, err = resolveFromInstruction(ctx, instr, directive, dockerHub, ghcr)
-		} else if instr.Command == "COPY" {
+		case "COPY":
 			latest, err = resolveCopyFromInstruction(ctx, instr, directive, dockerHub, ghcr)
 		}
 

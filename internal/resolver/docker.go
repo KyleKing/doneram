@@ -57,7 +57,7 @@ func (r *DockerHubResolver) Resolve(ctx context.Context, image string, pattern *
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Docker Hub unavailable (status %d) for image %s: retry later", resp.StatusCode, image)
+		return "", fmt.Errorf("fetching tags: Docker Hub unavailable (status %d) for image %s, retry later", resp.StatusCode, image)
 	}
 
 	body, err := io.ReadAll(resp.Body)

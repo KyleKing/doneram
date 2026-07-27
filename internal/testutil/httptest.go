@@ -66,7 +66,7 @@ func FixtureHandler(fixturePath string) http.HandlerFunc {
 		data, err := LoadFixture(fixturePath)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(fmt.Sprintf("error loading fixture: %v", err)))
+			_, _ = fmt.Fprintf(w, "error loading fixture: %v", err)
 			return
 		}
 

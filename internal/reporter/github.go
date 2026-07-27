@@ -26,16 +26,16 @@ func (r *GitHubActionsReporter) ReportCheck(file string, instructionCount, direc
 
 	var summary strings.Builder
 	summary.WriteString("## Available Updates\n\n")
-	summary.WriteString(fmt.Sprintf("**File:** `%s`\n\n", file))
+	fmt.Fprintf(&summary, "**File:** `%s`\n\n", file)
 
 	grouped := groupBySource(updates)
 	for source, sourceUpdates := range grouped {
-		summary.WriteString(fmt.Sprintf("### %s\n\n", strings.ToUpper(source)))
+		fmt.Fprintf(&summary, "### %s\n\n", strings.ToUpper(source))
 		summary.WriteString("| Package | Current | Latest |\n")
 		summary.WriteString("|---------|---------|--------|\n")
 		for _, update := range sourceUpdates {
-			summary.WriteString(fmt.Sprintf("| `%s` | `%s` | `%s` |\n",
-				update.Package, update.OldVersion, update.NewVersion))
+			fmt.Fprintf(&summary, "| `%s` | `%s` | `%s` |\n",
+				update.Package, update.OldVersion, update.NewVersion)
 		}
 		summary.WriteString("\n")
 	}
@@ -46,21 +46,21 @@ func (r *GitHubActionsReporter) ReportCheck(file string, instructionCount, direc
 func (r *GitHubActionsReporter) ReportUpdate(file string, updates []updater.Update, buildSuccess bool, buildError error) {
 	var summary strings.Builder
 	summary.WriteString("## Update Results\n\n")
-	summary.WriteString(fmt.Sprintf("**File:** `%s`\n\n", file))
+	fmt.Fprintf(&summary, "**File:** `%s`\n\n", file)
 
 	if len(updates) == 0 {
 		summary.WriteString("No updates applied.\n")
 	} else {
-		summary.WriteString(fmt.Sprintf("**Applied %d update(s)**\n\n", len(updates)))
+		fmt.Fprintf(&summary, "**Applied %d update(s)**\n\n", len(updates))
 
 		grouped := groupBySource(updates)
 		for source, sourceUpdates := range grouped {
-			summary.WriteString(fmt.Sprintf("### %s\n\n", strings.ToUpper(source)))
+			fmt.Fprintf(&summary, "### %s\n\n", strings.ToUpper(source))
 			summary.WriteString("| Package | Old Version | New Version |\n")
 			summary.WriteString("|---------|-------------|-------------|\n")
 			for _, update := range sourceUpdates {
-				summary.WriteString(fmt.Sprintf("| `%s` | `%s` | `%s` |\n",
-					update.Package, update.OldVersion, update.NewVersion))
+				fmt.Fprintf(&summary, "| `%s` | `%s` | `%s` |\n",
+					update.Package, update.OldVersion, update.NewVersion)
 			}
 			summary.WriteString("\n")
 		}
@@ -71,7 +71,7 @@ func (r *GitHubActionsReporter) ReportUpdate(file string, updates []updater.Upda
 		summary.WriteString("✅ Build successful\n")
 	} else if buildError != nil {
 		summary.WriteString("### Build Status\n\n")
-		summary.WriteString(fmt.Sprintf("❌ Build failed: `%v`\n", buildError))
+		fmt.Fprintf(&summary, "❌ Build failed: `%v`\n", buildError)
 	}
 
 	r.writeToSummary(summary.String())
@@ -82,10 +82,10 @@ func (r *GitHubActionsReporter) ReportSummary(files int, totalUpdates int, succe
 	summary.WriteString("\n## Summary\n\n")
 	summary.WriteString("| Metric | Count |\n")
 	summary.WriteString("|--------|-------|\n")
-	summary.WriteString(fmt.Sprintf("| Files processed | %d |\n", files))
-	summary.WriteString(fmt.Sprintf("| Total updates | %d |\n", totalUpdates))
-	summary.WriteString(fmt.Sprintf("| Successful | %d |\n", successful))
-	summary.WriteString(fmt.Sprintf("| Failed | %d |\n", failed))
+	fmt.Fprintf(&summary, "| Files processed | %d |\n", files)
+	fmt.Fprintf(&summary, "| Total updates | %d |\n", totalUpdates)
+	fmt.Fprintf(&summary, "| Successful | %d |\n", successful)
+	fmt.Fprintf(&summary, "| Failed | %d |\n", failed)
 
 	r.writeToSummary(summary.String())
 }
