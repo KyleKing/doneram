@@ -2,6 +2,13 @@ See freshness/checkers.py in yak-shears and now calcipy-template
 
 This repository *could* be more general (could rename?)
 
+## 2026-08-01 (freshen)
+
+- every item below is still open; nothing from 2026-07-27 has been addressed
+- `mise run pre-push` cannot pass on a machine without a running Docker daemon: TestDockerQuerier_QueryPackages guards on `testing.Short()` only, so a plain `go test ./...` fails with "failed to connect to the docker API"; either gate it on daemon reachability or make `mise run test` pass `-short`
+- testify is on v1.9.0 (v1.11.1 available) and urfave/cli on v3.0.0-beta1 (v3.10.1 available); the cli bump is beta-to-stable and will need an API review, so neither was taken here
+- there is no dependabot.yml, so those bumps will never be proposed automatically
+
 ## 2026-07-27 (freshen)
 
 - action.yml passes `-c ${{ inputs.config }}` but neither check nor update defines a config flag, so setting the input makes the composite action fail
