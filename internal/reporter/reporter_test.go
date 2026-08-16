@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kyleking/doner/internal/updater"
+	"github.com/kyleking/doneram/internal/updater"
 )
 
 func captureOutput(f func()) string {

@@ -1,8 +1,8 @@
 # Example: Node.js with npm packages
-# doner: node:22.#.#
+# doneram: node:22.#.#
 FROM node:22.0.0
 
-# doner: express:#.#.#, lodash:#.#.#
+# doneram: express:#.#.#, lodash:#.#.#
 RUN npm install -g \
     express@4.18.2 \
     lodash@4.17.21

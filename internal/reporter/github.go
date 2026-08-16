@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/kyleking/doner/internal/updater"
+	"github.com/kyleking/doneram/internal/updater"
 )
 
 type GitHubActionsReporter struct {

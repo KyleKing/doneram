@@ -1,8 +1,8 @@
 # Example: Debian with APT packages
-# doner: debian:bookworm-*
+# doneram: debian:bookworm-*
 FROM debian:bookworm-slim
 
-# doner: wget:ignore, curl:#.#.#
+# doneram: wget:ignore, curl:#.#.#
 RUN apt-get update && apt-get install -y \
     wget \
     curl \

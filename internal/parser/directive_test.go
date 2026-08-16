@@ -13,25 +13,25 @@ func TestParseDirective_SinglePackage(t *testing.T) {
 	}{
 		{
 			name:        "simple package with pattern",
-			line:        "# doner: python:3.11.#",
+			line:        "# doneram: python:3.11.#",
 			wantPackage: "python",
 			wantPattern: "3.11.#",
 		},
 		{
 			name:        "package without pattern",
-			line:        "# doner: python",
+			line:        "# doneram: python",
 			wantPackage: "python",
 			wantPattern: "#.#.#",
 		},
 		{
 			name:        "package with full semver",
-			line:        "# doner: requests:2.31.0",
+			line:        "# doneram: requests:2.31.0",
 			wantPackage: "requests",
 			wantPattern: "2.31.0",
 		},
 		{
 			name:        "package with wildcard",
-			line:        "# doner: flask:*",
+			line:        "# doneram: flask:*",
 			wantPackage: "flask",
 			wantPattern: "*",
 		},
@@ -61,7 +61,7 @@ func TestParseDirective_SinglePackage(t *testing.T) {
 }
 
 func TestParseDirective_MultiPackage(t *testing.T) {
-	line := "# doner: python:3.11.#, requests:2.#.#, flask:*"
+	line := "# doneram: python:3.11.#, requests:2.#.#, flask:*"
 	d := ParseDirective(line, 1)
 
 	if d == nil {
@@ -94,7 +94,7 @@ func TestParseDirective_MultiPackage(t *testing.T) {
 }
 
 func TestParseDirective_Ignore(t *testing.T) {
-	line := "# doner: ignore"
+	line := "# doneram: ignore"
 	d := ParseDirective(line, 1)
 
 	if d == nil {
@@ -111,7 +111,7 @@ func TestParseDirective_Ignore(t *testing.T) {
 }
 
 func TestParseDirective_PackageIgnore(t *testing.T) {
-	line := "# doner: python:ignore"
+	line := "# doneram: python:ignore"
 	d := ParseDirective(line, 1)
 
 	if d == nil {
@@ -138,7 +138,7 @@ func TestParseDirective_NotDirective(t *testing.T) {
 	}{
 		{"regular comment", "# This is a regular comment"},
 		{"empty comment", "#"},
-		{"no hash", "doner: python:3.11.#"},
+		{"no hash", "doneram: python:3.11.#"},
 		{"empty line", ""},
 		{"instruction", "FROM python:3.11"},
 	}
@@ -162,19 +162,19 @@ func TestParseDirective_WithWhitespace(t *testing.T) {
 	}{
 		{
 			name:        "extra spaces",
-			line:        "#   doner:   python:3.11.#   ",
+			line:        "#   doneram:   python:3.11.#   ",
 			wantPackage: "python",
 			wantPattern: "3.11.#",
 		},
 		{
 			name:        "tabs",
-			line:        "#\tdoner:\tpython:3.11.#",
+			line:        "#\tdoneram:\tpython:3.11.#",
 			wantPackage: "python",
 			wantPattern: "3.11.#",
 		},
 		{
 			name:        "mixed whitespace",
-			line:        "#  doner:  python : 3.11.#  ",
+			line:        "#  doneram:  python : 3.11.#  ",
 			wantPackage: "python ",
 			wantPattern: " 3.11.#",
 		},
@@ -203,7 +203,7 @@ func TestParseDirective_WithWhitespace(t *testing.T) {
 }
 
 func TestParseDirective_LineNumber(t *testing.T) {
-	line := "# doner: python:3.11.#"
+	line := "# doneram: python:3.11.#"
 
 	tests := []int{1, 5, 10, 100}
 	for _, lineNum := range tests {
@@ -226,17 +226,17 @@ func TestParseDirective_RawContent(t *testing.T) {
 	}{
 		{
 			name:    "single package",
-			line:    "# doner: python:3.11.#",
+			line:    "# doneram: python:3.11.#",
 			wantRaw: "python:3.11.#",
 		},
 		{
 			name:    "multi package",
-			line:    "# doner: python:3.11.#, requests:2.#.#",
+			line:    "# doneram: python:3.11.#, requests:2.#.#",
 			wantRaw: "python:3.11.#, requests:2.#.#",
 		},
 		{
 			name:    "ignore",
-			line:    "# doner: ignore",
+			line:    "# doneram: ignore",
 			wantRaw: "ignore",
 		},
 	}
@@ -305,7 +305,7 @@ func TestParsePackageDirective_Ignore(t *testing.T) {
 }
 
 func TestParseDirective_EmptyPackages(t *testing.T) {
-	line := "# doner: python:3.11.#, , , requests:2.#.#"
+	line := "# doneram: python:3.11.#, , , requests:2.#.#"
 	d := ParseDirective(line, 1)
 
 	if d == nil {
@@ -319,7 +319,7 @@ func TestParseDirective_EmptyPackages(t *testing.T) {
 }
 
 func TestParseDirective_TrailingComma(t *testing.T) {
-	line := "# doner: python:3.11.#,"
+	line := "# doneram: python:3.11.#,"
 	d := ParseDirective(line, 1)
 
 	if d == nil {

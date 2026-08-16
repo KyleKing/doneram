@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// dockerfileWithoutDirectives has no `# doner:` directives, so processing it
+// dockerfileWithoutDirectives has no `# doneram:` directives, so processing it
 // never reaches a resolver and the test stays offline.
 const dockerfileWithoutDirectives = `FROM alpine:3.19 AS base
 RUN apk add --no-cache curl
@@ -27,7 +27,7 @@ func writeDockerfile(t *testing.T, dir, name string) string {
 func runApp(t *testing.T, args ...string) error {
 	t.Helper()
 	app := NewApp("test", "test", "test")
-	return app.Run(context.Background(), append([]string{"doner"}, args...))
+	return app.Run(context.Background(), append([]string{"doneram"}, args...))
 }
 
 func TestProcessCheckFileWithoutDirectives(t *testing.T) {

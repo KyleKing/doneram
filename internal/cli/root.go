@@ -7,12 +7,12 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/kyleking/doner/internal/httpclient"
+	"github.com/kyleking/doneram/internal/httpclient"
 )
 
 func NewApp(version, commit, date string) *cli.Command {
 	return &cli.Command{
-		Name:    "doner",
+		Name:    "doneram",
 		Usage:   "Dockerfile version maintainer",
 		Version: version,
 		Before:  setupLogging,

@@ -1,4 +1,4 @@
-# Using Doner in GitHub Actions
+# Using Doneram in GitHub Actions
 
 ## Manual Installation
 
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Doner
+      - name: Install Doneram
         run: |
           VERSION=v1.0.0  # Or use 'latest' from releases
           ARCH=$(uname -m)
@@ -27,12 +27,12 @@ jobs:
           esac
           OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-          URL="https://github.com/kyleking/doner/releases/download/${VERSION}/doner_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+          URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/doneram_${VERSION#v}_${OS}_${ARCH}.tar.gz"
           curl -sL "$URL" | tar xz -C /usr/local/bin
-          chmod +x /usr/local/bin/doner
+          chmod +x /usr/local/bin/doneram
 
       - name: Check for updates
-        run: doner check -f Dockerfile --verbose
+        run: doneram check -f Dockerfile --verbose
 ```
 
 ## Multi-file Checking
@@ -41,7 +41,7 @@ Check multiple Dockerfiles:
 
 ```yaml
 - name: Check all Dockerfiles
-  run: doner check -f "docker/*/Dockerfile" -f "**/Dockerfile" --workers 4
+  run: doneram check -f "docker/*/Dockerfile" -f "**/Dockerfile" --workers 4
 ```
 
 ## Auto-update Workflow
@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Doner
+      - name: Install Doneram
         run: |
           VERSION=latest
           ARCH=$(uname -m)
@@ -73,27 +73,27 @@ jobs:
 
           # Get latest release if VERSION=latest
           if [ "$VERSION" = "latest" ]; then
-            VERSION=$(curl -s https://api.github.com/repos/kyleking/doner/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+            VERSION=$(curl -s https://api.github.com/repos/kyleking/doneram/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
           fi
 
-          URL="https://github.com/kyleking/doner/releases/download/${VERSION}/doner_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+          URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/doneram_${VERSION#v}_${OS}_${ARCH}.tar.gz"
           curl -sL "$URL" | tar xz -C /usr/local/bin
-          chmod +x /usr/local/bin/doner
+          chmod +x /usr/local/bin/doneram
 
       - name: Update Dockerfiles
-        run: doner update -f Dockerfile --format json > updates.json
+        run: doneram update -f Dockerfile --format json > updates.json
 
       - name: Create Pull Request
         if: hashFiles('updates.json') != ''
         uses: peter-evans/create-pull-request@v5
         with:
-          commit-message: "chore(docker): update dependencies via Doner"
+          commit-message: "chore(docker): update dependencies via Doneram"
           title: "Update Docker dependencies"
           body: |
-            Automated Dockerfile updates from Doner.
+            Automated Dockerfile updates from Doneram.
 
             See updates.json for details.
-          branch: doner/updates
+          branch: doneram/updates
           labels: dependencies,docker
 ```
 
@@ -101,24 +101,24 @@ jobs:
 
 ### Standard Output
 ```bash
-doner check -f Dockerfile --format stdout
+doneram check -f Dockerfile --format stdout
 ```
 
 ### JSON (for automation)
 ```bash
-doner check -f Dockerfile --format json
+doneram check -f Dockerfile --format json
 ```
 
 ### GitHub Actions Format
 ```bash
-doner check -f Dockerfile --format github-actions
+doneram check -f Dockerfile --format github-actions
 ```
 
 ## Advanced Configuration
 
 ### Verbose Output
 ```bash
-doner check -f Dockerfile --verbose
+doneram check -f Dockerfile --verbose
 ```
 
 Enables debug logging showing:
@@ -129,7 +129,7 @@ Enables debug logging showing:
 
 ### Parallel Processing
 ```bash
-doner check -f "docker/*/Dockerfile" --workers 8
+doneram check -f "docker/*/Dockerfile" --workers 8
 ```
 
 Process multiple Dockerfiles concurrently.
@@ -152,11 +152,11 @@ jobs:
           - docker/worker/Dockerfile
     steps:
       - uses: actions/checkout@v4
-      - name: Install Doner
+      - name: Install Doneram
         run: |
           # ... installation steps ...
       - name: Check ${{ matrix.dockerfile }}
-        run: doner check -f ${{ matrix.dockerfile }} --verbose
+        run: doneram check -f ${{ matrix.dockerfile }} --verbose
 ```
 
 ### Conditional Updates
@@ -167,18 +167,18 @@ Only update if specific conditions are met:
 - name: Check for updates
   id: check
   run: |
-    doner check -f Dockerfile --format json > check.json
+    doneram check -f Dockerfile --format json > check.json
     UPDATES=$(jq '.updates | length' check.json)
     echo "count=$UPDATES" >> $GITHUB_OUTPUT
 
 - name: Update if needed
   if: steps.check.outputs.count > 0
-  run: doner update -f Dockerfile
+  run: doneram update -f Dockerfile
 ```
 
 ## Supported Package Managers
 
-Doner supports checking versions for the following package managers in `FROM` and `COPY --from` instructions:
+Doneram supports checking versions for the following package managers in `FROM` and `COPY --from` instructions:
 
 - **Container Registries**: Docker Hub, GitHub Container Registry (GHCR)
 - **Python**: PyPI (`pip install`)

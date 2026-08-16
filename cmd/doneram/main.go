@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/kyleking/doner/internal/cli"
-	"github.com/kyleking/doner/internal/httpclient"
+	"github.com/kyleking/doneram/internal/cli"
+	"github.com/kyleking/doneram/internal/httpclient"
 )
 
 var (

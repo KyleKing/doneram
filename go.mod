@@ -1,4 +1,4 @@
-module github.com/kyleking/doner
+module github.com/kyleking/doneram
 
 go 1.23
 

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/kyleking/doner/internal/updater"
+	"github.com/kyleking/doneram/internal/updater"
 )
 
 type JSONReporter struct {

@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/kyleking/doner/internal/httpclient"
-	"github.com/kyleking/doner/internal/parser"
-	"github.com/kyleking/doner/pkg/version"
+	"github.com/kyleking/doneram/internal/httpclient"
+	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/pkg/version"
 )
 
 type PyPIResolver struct {

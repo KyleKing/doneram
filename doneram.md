@@ -1,26 +1,24 @@
-# Doner - Dockerfile Maintainer 🦌
+# Doneram - Dockerfile Maintainer
 
-**Doner** (pronounced "donor") is an automated Dockerfile version updater that keeps your container images and dependencies fresh, tested, and production-ready.
-
-> *"Like Santa's reindeer delivering updates, Doner keeps your Dockerfiles flying smoothly through the CI/CD sky."*
+**Doneram** is an automated Dockerfile version updater that keeps your container images and dependencies fresh, tested, and production-ready.
 
 ## Overview
 
-Doner automatically:
+Doneram automatically:
 1. Parses Dockerfiles and detects version-pinned dependencies
 2. Checks registries for latest versions matching your constraints
 3. Updates versions and validates via Docker build + HEALTHCHECK
 4. Queries running containers for package manager updates (apk, apt, etc.)
 5. Generates comprehensive update reports with changelogs
 
-**Key Differentiator**: Doner validates updates by actually building and running your containers, catching breaking changes before they reach production.
+**Key Differentiator**: Doneram validates updates by actually building and running your containers, catching breaking changes before they reach production.
 
 ## Comment Directive Syntax
 
 ### Basic Syntax
 
 ```dockerfile
-# doner: <package-name>:<version-pattern>
+# doneram: <package-name>:<version-pattern>
 ```
 
 The directive applies to the **next line** in the Dockerfile.
@@ -32,18 +30,18 @@ Use `#` as a wildcard for version segments and `*` for suffixes:
 ```dockerfile
 # Example from https://docs.astral.sh/uv/guides/integration/aws-lambda/
 
-# doner: uv:0.9.#
+# doneram: uv:0.9.#
 FROM ghcr.io/astral-sh/uv:0.9.26 AS uv
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM public.ecr.aws/lambda/python:3.13 AS builder
 
 # Example from https://github.com/elves/elvish
 
-# doner: golang:1.#.#-alpine*
+# doneram: golang:1.#.#-alpine*
 FROM golang:1.22-alpine3.19 as builder
 
-# doner: alpine:3.#
+# doneram: alpine:3.#
 FROM alpine:3.19
 ```
 
@@ -57,9 +55,9 @@ FROM alpine:3.19
 ### Pre-release Support (Future)
 
 ```dockerfile
-# doner: package:1.#.#^
-# doner: package:1.#.#&
-# doner: package:1.#.#!
+# doneram: package:1.#.#^
+# doneram: package:1.#.#&
+# doneram: package:1.#.#!
 ```
 
 - `^` - Include release candidates (rc, RC)
@@ -69,7 +67,7 @@ FROM alpine:3.19
 ### Multi-package Directives
 
 ```dockerfile
-# doner: bash:#.#.#, curl:#.#.#, git:ignore
+# doneram: bash:#.#.#, curl:#.#.#, git:ignore
 RUN apk add --no-cache bash curl git
 ```
 
@@ -79,10 +77,10 @@ RUN apk add --no-cache bash curl git
 ### Ignoring Updates
 
 ```dockerfile
-# doner: ignore
+# doneram: ignore
 FROM legacy-image:1.0.0
 
-# doner: git:ignore, vim:ignore
+# doneram: git:ignore, vim:ignore
 RUN apk add bash curl git vim  # Only updates bash, curl
 ```
 
@@ -90,28 +88,28 @@ RUN apk add bash curl git vim  # Only updates bash, curl
 
 ```bash
 # Check for updates (dry-run, looks for ./Dockerfile by default)
-doner check
+doneram check
 
 # Check specific Dockerfile
-doner check -f docker/api/Dockerfile
+doneram check -f docker/api/Dockerfile
 
 # Test with example fixtures
-doner check -f test/fixtures/elvish.Dockerfile
+doneram check -f test/fixtures/elvish.Dockerfile
 
 # Apply updates with build validation
-doner update -f Dockerfile
+doneram update -f Dockerfile
 
 # Apply updates without build validation
-doner update -f Dockerfile --skip-build
+doneram update -f Dockerfile --skip-build
 
 # Apply updates with build but skip healthcheck
-doner update -f Dockerfile --skip-healthcheck
+doneram update -f Dockerfile --skip-healthcheck
 
 # Output in GitHub Actions format
-doner check -f Dockerfile --format github-actions
+doneram check -f Dockerfile --format github-actions
 
 # Output in JSON format
-doner check -f Dockerfile --format json
+doneram check -f Dockerfile --format json
 ```
 
 ## GitHub Action
@@ -129,26 +127,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Doner
+      - name: Install Doneram
         run: |
-          curl -L https://github.com/your-org/doner/releases/latest/download/doner-linux-amd64 \
-            -o /usr/local/bin/doner
-          chmod +x /usr/local/bin/doner
+          curl -L https://github.com/your-org/doneram/releases/latest/download/doneram-linux-amd64 \
+            -o /usr/local/bin/doneram
+          chmod +x /usr/local/bin/doneram
 
       - name: Check for updates
-        id: doner
+        id: doneram
         run: |
-          doner update -f docker/app/Dockerfile --format github-actions
+          doneram update -f docker/app/Dockerfile --format github-actions
           echo "updates_available=$?" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        if: steps.doner.outputs.updates_available == '0'
+        if: steps.doneram.outputs.updates_available == '0'
         uses: peter-evans/create-pull-request@v5
         with:
-          commit-message: "chore(docker): Update dependencies via Doner"
+          commit-message: "chore(docker): Update dependencies via Doneram"
           title: "Update Docker dependencies"
-          body-path: doner-summary.md
-          branch: doner/updates
+          body-path: doneram-summary.md
+          branch: doneram/updates
           labels: dependencies,docker
 ```
 
@@ -169,7 +167,7 @@ jobs:
 
 2. ✅ **Dockerfile Parser**
    - Parse Dockerfile instructions (FROM, COPY --from, RUN)
-   - Extract doner directives from comments
+   - Extract doneram directives from comments
    - Parse version patterns (wildcards)
    - Line-by-line instruction mapping
 
@@ -203,12 +201,12 @@ jobs:
 #### Test Cases:
 ```dockerfile
 # Real-world example from elvish project
-# doner: golang:1.#.#-alpine*
+# doneram: golang:1.#.#-alpine*
 FROM golang:1.22-alpine3.19 as builder
 
 RUN apk add --no-cache --virtual build-deps make git
 
-# doner: alpine:3.#
+# doneram: alpine:3.#
 FROM alpine:3.19
 ```
 
@@ -263,17 +261,17 @@ FROM alpine:3.19
 # Real-world examples from various projects
 
 # Alpine-based with apk packages
-# doner: alpine:3.#
+# doneram: alpine:3.#
 FROM alpine:3.19
 
-# doner: bash:#.#.#, curl:#.#.#, git:ignore
+# doneram: bash:#.#.#, curl:#.#.#, git:ignore
 RUN apk add --no-cache bash=5.2.15-r0 curl=8.5.0-r0 git
 
 # Debian-based with apt packages
-# doner: debian:bookworm-*
+# doneram: debian:bookworm-*
 FROM debian:bookworm-slim
 
-# doner: wget:ignore, curl:#.#.#
+# doneram: wget:ignore, curl:#.#.#
 RUN apt-get update && apt-get install -y wget curl ca-certificates
 ```
 
@@ -367,14 +365,14 @@ RUN apt-get update && apt-get install -y wget curl ca-certificates
 ### Project Structure
 
 ```
-doner/
+doneram/
 ├── cmd/
-│   └── doner/
+│   └── doneram/
 │       └── main.go                 # CLI entrypoint
 ├── internal/
 │   ├── parser/
 │   │   ├── dockerfile.go           # Dockerfile AST parsing
-│   │   ├── directive.go            # Doner directive parsing
+│   │   ├── directive.go            # Doneram directive parsing
 │   │   └── pattern.go              # Version pattern matching
 │   ├── resolver/
 │   │   ├── resolver.go             # Resolver interface
@@ -432,7 +430,7 @@ doner/
 
 ```go
 // go.mod
-module github.com/your-org/doner
+module github.com/your-org/doneram
 
 go 1.23
 
@@ -464,7 +462,7 @@ type Instruction struct {
     Raw      string   // Original line
 }
 
-// Doner directive
+// Doneram directive
 type Directive struct {
     Packages []PackageDirective
     Ignore   bool
@@ -524,10 +522,10 @@ type Resolver interface {
 Real-world example from [uv AWS Lambda integration](https://docs.astral.sh/uv/guides/integration/aws-lambda/):
 
 ```dockerfile
-# doner: uv:0.9.#
+# doneram: uv:0.9.#
 FROM ghcr.io/astral-sh/uv:0.9.24 AS uv
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM public.ecr.aws/lambda/python:3.13 AS builder
 
 ENV UV_COMPILE_BYTECODE=1
@@ -541,7 +539,7 @@ RUN --mount=from=uv,source=/uv,target=/bin/uv \
     uv export --frozen --no-emit-workspace --no-dev --no-editable -o requirements.txt && \
     uv pip install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM public.ecr.aws/lambda/python:3.13
 
 COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
@@ -550,10 +548,10 @@ COPY ./app ${LAMBDA_TASK_ROOT}/app
 CMD ["app.main.handler"]
 ```
 
-### Doner Execution
+### Doneram Execution
 
 ```bash
-$ doner check -f test/fixtures/uv-lambda.Dockerfile
+$ doneram check -f test/fixtures/uv-lambda.Dockerfile
 
 Parsed test/fixtures/uv-lambda.Dockerfile:
   Instructions: 12
@@ -564,13 +562,13 @@ Checking for updates:
   → python:3.13.0 -> 3.13.11
 ```
 
-Future `doner update` would produce:
+Future `doneram update` would produce:
 
 ```dockerfile
-# doner: uv:0.9.#
+# doneram: uv:0.9.#
 FROM ghcr.io/astral-sh/uv:0.9.30 AS uv
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM public.ecr.aws/lambda/python:3.13.1 AS builder
 
 ENV UV_COMPILE_BYTECODE=1
@@ -584,7 +582,7 @@ RUN --mount=from=uv,source=/uv,target=/bin/uv \
     uv export --frozen --no-emit-workspace --no-dev --no-editable -o requirements.txt && \
     uv pip install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM public.ecr.aws/lambda/python:3.13.1
 
 COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}

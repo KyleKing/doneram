@@ -14,8 +14,8 @@ sources = ['**/*.go', 'go.sum']
 
 [tasks.build]
 depends = ["format"]
-description = "Build doner binary"
-run = "go build -o ./bin/doner ./cmd/doner"
+description = "Build doneram binary"
+run = "go build -o ./bin/doneram ./cmd/doneram"
 
 [tasks.test]
 depends = ["format", "lint"]
@@ -28,8 +28,8 @@ description = "View test coverage of most recent test run"
 run = "go tool cover -html=coverage.out"
 
 [tasks.install]
-description = "Install doner locally"
-run = "go install ./cmd/doner"
+description = "Install doneram locally"
+run = "go install ./cmd/doneram"
 
 [tasks.pre-push]
 depends = ["build", "test"]

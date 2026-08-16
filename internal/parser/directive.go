@@ -18,7 +18,7 @@ type PackageDirective struct {
 	Ignore  bool
 }
 
-var directiveRegex = regexp.MustCompile(`^\s*#\s*doner:\s*(.+)$`)
+var directiveRegex = regexp.MustCompile(`^\s*#\s*doneram:\s*(.+)$`)
 
 func ParseDirective(line string, lineNum int) *Directive {
 	matches := directiveRegex.FindStringSubmatch(line)

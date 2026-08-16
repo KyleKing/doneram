@@ -3,17 +3,17 @@ package updater
 import (
 	"testing"
 
-	"github.com/kyleking/doner/internal/parser"
+	"github.com/kyleking/doneram/internal/parser"
 )
 
 func TestUpdateFromInstructions(t *testing.T) {
 	instructions := []parser.Instruction{
 		{Command: "FROM", Args: "alpine:3.19 AS base", Line: 2},
-		{Command: "COPY", Args: "--from=ghcr.io/kyleking/doner:1.0.0 /a /b", Line: 4},
+		{Command: "COPY", Args: "--from=ghcr.io/kyleking/doneram:1.0.0 /a /b", Line: 4},
 	}
 	directives := map[int]*parser.Directive{
 		1: {Packages: []parser.PackageDirective{{Name: "alpine"}}},
-		3: {Packages: []parser.PackageDirective{{Name: "doner"}}},
+		3: {Packages: []parser.PackageDirective{{Name: "doneram"}}},
 	}
 	resolved := map[int]string{2: "3.20.0", 4: "1.2.0"}
 

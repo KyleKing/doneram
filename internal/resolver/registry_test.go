@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/kyleking/doner/internal/parser"
+	"github.com/kyleking/doneram/internal/parser"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -39,8 +39,8 @@ func TestParseDockerImage(t *testing.T) {
 		wantRepo      string
 	}{
 		{"alpine", "library", "alpine"},
-		{"kyleking/doner", "kyleking", "doner"},
-		{"ghcr.io/kyleking/doner", "ghcr.io/kyleking", "doner"},
+		{"kyleking/doneram", "kyleking", "doneram"},
+		{"ghcr.io/kyleking/doneram", "ghcr.io/kyleking", "doneram"},
 		{"registry.example.com/team/group/app", "registry.example.com/team/group", "app"},
 	}
 
@@ -87,7 +87,7 @@ func TestGHCRResolverResolve(t *testing.T) {
 	body := `{"tags": ["1.0.0", "1.2.3", "edge"]}`
 	r := NewGHCRResolver(clientReturning(http.StatusOK, body))
 
-	got, err := r.Resolve(context.Background(), "ghcr.io/kyleking/doner", parser.ParsePattern("1.#.#"))
+	got, err := r.Resolve(context.Background(), "ghcr.io/kyleking/doneram", parser.ParsePattern("1.#.#"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestGHCRResolverErrors(t *testing.T) {
 	pattern := parser.ParsePattern("1.#.#")
 
 	if _, err := NewGHCRResolver(clientReturning(http.StatusOK, `{"tags":[]}`)).
-		Resolve(context.Background(), "ghcr.io/doner", pattern); err == nil {
+		Resolve(context.Background(), "ghcr.io/doneram", pattern); err == nil {
 		t.Error("an image reference without a namespace should be rejected")
 	}
 
@@ -112,7 +112,7 @@ func TestGHCRResolverErrors(t *testing.T) {
 	}
 
 	for name, r := range cases {
-		if _, err := r.Resolve(context.Background(), "ghcr.io/kyleking/doner", pattern); err == nil {
+		if _, err := r.Resolve(context.Background(), "ghcr.io/kyleking/doneram", pattern); err == nil {
 			t.Errorf("%s: Resolve should return an error", name)
 		}
 	}

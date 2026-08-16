@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kyleking/doner/internal/httpclient"
-	"github.com/kyleking/doner/internal/parser"
-	"github.com/kyleking/doner/pkg/version"
+	"github.com/kyleking/doneram/internal/httpclient"
+	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/pkg/version"
 )
 
 type ComposerResolver struct {
@@ -59,7 +59,7 @@ func (r *ComposerResolver) Resolve(ctx context.Context, pkg string, pattern *par
 		return "", fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", "doner/1.0")
+	req.Header.Set("User-Agent", "doneram/1.0")
 
 	resp, err := r.client.Do(req)
 	if err != nil {

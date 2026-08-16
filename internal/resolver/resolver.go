@@ -3,7 +3,7 @@ package resolver
 import (
 	"context"
 
-	"github.com/kyleking/doner/internal/parser"
+	"github.com/kyleking/doneram/internal/parser"
 )
 
 type Resolver interface {

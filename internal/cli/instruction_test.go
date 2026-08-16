@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kyleking/doner/internal/parser"
-	"github.com/kyleking/doner/internal/resolver"
+	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/resolver"
 )
 
 type fakeResolver struct {
@@ -59,9 +59,9 @@ func TestCheckFromInstructionUsesDockerHub(t *testing.T) {
 
 func TestCheckFromInstructionUsesGHCR(t *testing.T) {
 	hub, ghcr := newResolvers()
-	instr := parser.Instruction{Command: "FROM", Args: "ghcr.io/kyleking/doner:v1"}
+	instr := parser.Instruction{Command: "FROM", Args: "ghcr.io/kyleking/doneram:v1"}
 
-	got, err := checkFromInstruction(context.Background(), instr, directiveFor("doner"), hub, ghcr)
+	got, err := checkFromInstruction(context.Background(), instr, directiveFor("doneram"), hub, ghcr)
 	if err != nil {
 		t.Fatalf("checkFromInstruction: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestResolveFromInstructionUsesGHCR(t *testing.T) {
 	hub, ghcr := newResolvers()
 
 	got, err := resolveFromInstruction(context.Background(),
-		parser.Instruction{Args: "ghcr.io/kyleking/doner:v1"}, directiveFor("doner"), hub, ghcr)
+		parser.Instruction{Args: "ghcr.io/kyleking/doneram:v1"}, directiveFor("doneram"), hub, ghcr)
 	if err != nil {
 		t.Fatalf("resolveFromInstruction: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestResolveCopyFromInstruction(t *testing.T) {
 	hub, ghcr := newResolvers()
 
 	got, err := resolveCopyFromInstruction(context.Background(),
-		parser.Instruction{Args: "--from=ghcr.io/kyleking/doner:v1 /a /b"}, directiveFor("doner"), hub, ghcr)
+		parser.Instruction{Args: "--from=ghcr.io/kyleking/doneram:v1 /a /b"}, directiveFor("doneram"), hub, ghcr)
 	if err != nil {
 		t.Fatalf("resolveCopyFromInstruction: %v", err)
 	}

@@ -1,4 +1,4 @@
-name: 'Doner - Dockerfile Maintainer'
+name: 'Doneram - Dockerfile Maintainer'
 description: 'Automated Dockerfile version updater that validates changes via Docker build'
 author: 'kyleking'
 
@@ -16,14 +16,14 @@ inputs:
     required: false
     default: 'Dockerfile'
   config:
-    description: 'Path to .doner.yml config file'
+    description: 'Path to .doneram.yml config file'
     required: false
   verbose:
     description: 'Enable verbose output'
     required: false
     default: 'false'
   version:
-    description: 'Doner version to use (default: latest)'
+    description: 'Doneram version to use (default: latest)'
     required: false
     default: 'latest'
 
@@ -40,13 +40,13 @@ runs:
       shell: bash
       run: |
         if [ "${{ inputs.version }}" = "latest" ]; then
-          VERSION=$(curl -s https://api.github.com/repos/kyleking/doner/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION=$(curl -s https://api.github.com/repos/kyleking/doneram/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
         else
           VERSION="${{ inputs.version }}"
         fi
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-    - name: Download doner
+    - name: Download doneram
       shell: bash
       run: |
         VERSION="${{ steps.version.outputs.version }}"
@@ -57,12 +57,12 @@ runs:
         esac
         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-        URL="https://github.com/kyleking/doner/releases/download/${VERSION}/doner_${VERSION#v}_${OS}_${ARCH}.tar.gz"
-        echo "Downloading doner from: $URL"
+        URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/doneram_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+        echo "Downloading doneram from: $URL"
         curl -sL "$URL" | tar xz -C /usr/local/bin
-        chmod +x /usr/local/bin/doner
+        chmod +x /usr/local/bin/doneram
 
-    - name: Run doner
+    - name: Run doneram
       id: run
       shell: bash
       run: |
@@ -80,7 +80,7 @@ runs:
           ARGS="$ARGS -v"
         fi
 
-        doner $ARGS
+        doneram $ARGS
 
         if [ $? -eq 0 ]; then
           echo "updates-available=true" >> $GITHUB_OUTPUT

@@ -12,7 +12,7 @@ func newVersionCommand(version, commit, date string) *cli.Command {
 		Name:  "version",
 		Usage: "Print version information",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			fmt.Printf("doner %s\n", version)
+			fmt.Printf("doneram %s\n", version)
 			fmt.Printf("  commit: %s\n", commit)
 			fmt.Printf("  built:  %s\n", date)
 			return nil

@@ -1,6 +1,6 @@
 # Example from https://github.com/jitsi/docker-jitsi-meet/blob/master/base/Dockerfile
 
-# doner: debian:bookworm-*
+# doneram: debian:bookworm-*
 FROM debian:bookworm-slim
 
 ARG JITSI_RELEASE=stable

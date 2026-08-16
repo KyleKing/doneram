@@ -1,4 +1,4 @@
-# Doner
+# Doneram
 
 Automated Dockerfile version updater that keeps your container images and dependencies fresh, tested, and production-ready.
 
@@ -7,18 +7,18 @@ Automated Dockerfile version updater that keeps your container images and depend
 ### Homebrew (coming soon)
 
 ```bash
-brew install kyleking/tap/doner
+brew install kyleking/tap/doneram
 ```
 
 ### From source
 
 ```bash
-go install github.com/kyleking/doner/cmd/doner@latest
+go install github.com/kyleking/doneram/cmd/doneram@latest
 ```
 
 ### Binary releases
 
-Download from [GitHub Releases](https://github.com/kyleking/doner/releases).
+Download from [GitHub Releases](https://github.com/kyleking/doneram/releases).
 
 ## Usage
 
@@ -26,22 +26,22 @@ Download from [GitHub Releases](https://github.com/kyleking/doner/releases).
 
 ```bash
 # Check for updates (dry-run, looks for ./Dockerfile by default)
-doner check
+doneram check
 
 # Check specific Dockerfile
-doner check -f docker/api/Dockerfile
+doneram check -f docker/api/Dockerfile
 
 # Test with example fixtures
-doner check -f test/fixtures/simple-python.Dockerfile
+doneram check -f test/fixtures/simple-python.Dockerfile
 
 # Update Dockerfile with latest versions and validate
-doner update -f Dockerfile
+doneram update -f Dockerfile
 
 # Update without Docker build validation
-doner update -f Dockerfile --skip-build
+doneram update -f Dockerfile --skip-build
 
 # Update with build but skip healthcheck
-doner update -f Dockerfile --skip-healthcheck
+doneram update -f Dockerfile --skip-healthcheck
 ```
 
 ### GitHub Action
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: kyleking/doner@v1
+      - uses: kyleking/doneram@v1
         with:
           command: check
           file: docker/api/Dockerfile
@@ -71,18 +71,18 @@ Add directives above Dockerfile instructions to control version updates:
 ```dockerfile
 # Example from https://docs.astral.sh/uv/guides/integration/aws-lambda/
 
-# doner: uv:0.9.#
+# doneram: uv:0.9.#
 FROM ghcr.io/astral-sh/uv:0.9.26 AS uv
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM public.ecr.aws/lambda/python:3.13 AS builder
 
 # Example from https://github.com/elves/elvish
 
-# doner: golang:1.#.#-alpine*
+# doneram: golang:1.#.#-alpine*
 FROM golang:1.22-alpine3.19 as builder
 
-# doner: alpine:3.#
+# doneram: alpine:3.#
 FROM alpine:3.19
 ```
 

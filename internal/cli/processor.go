@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyleking/doner/internal/updater"
+	"github.com/kyleking/doneram/internal/updater"
 )
 
 // FileResult contains the processing result for a single file.

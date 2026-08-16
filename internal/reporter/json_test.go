@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kyleking/doner/internal/updater"
+	"github.com/kyleking/doneram/internal/updater"
 )
 
 func TestJSONReporter_ReportCheck(t *testing.T) {

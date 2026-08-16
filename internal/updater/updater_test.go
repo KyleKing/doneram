@@ -14,7 +14,7 @@ func TestUpdater_Apply(t *testing.T) {
 	}{
 		{
 			name: "update single FROM instruction",
-			content: `# doner: python:3.13.#
+			content: `# doneram: python:3.13.#
 FROM python:3.13.0
 
 COPY . .`,
@@ -27,17 +27,17 @@ COPY . .`,
 					Line:       2,
 				},
 			},
-			want: `# doner: python:3.13.#
+			want: `# doneram: python:3.13.#
 FROM python:3.13.11
 
 COPY . .`,
 		},
 		{
 			name: "update multiple instructions",
-			content: `# doner: python:3.13.#
+			content: `# doneram: python:3.13.#
 FROM python:3.13.0 AS builder
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM python:3.13.0`,
 			updates: []Update{
 				{
@@ -55,15 +55,15 @@ FROM python:3.13.0`,
 					Line:       5,
 				},
 			},
-			want: `# doner: python:3.13.#
+			want: `# doneram: python:3.13.#
 FROM python:3.13.11 AS builder
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM python:3.13.11`,
 		},
 		{
 			name: "update COPY --from instruction",
-			content: `# doner: ignore
+			content: `# doneram: ignore
 COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /bin/`,
 			updates: []Update{
 				{
@@ -74,12 +74,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /bin/`,
 					Line:       2,
 				},
 			},
-			want: `# doner: ignore
+			want: `# doneram: ignore
 COPY --from=ghcr.io/astral-sh/uv:0.9.30 /uv /bin/`,
 		},
 		{
 			name: "update with suffix",
-			content: `# doner: golang:1.#.#-alpine*
+			content: `# doneram: golang:1.#.#-alpine*
 FROM golang:1.22-alpine3.19 as builder`,
 			updates: []Update{
 				{
@@ -90,7 +90,7 @@ FROM golang:1.22-alpine3.19 as builder`,
 					Line:       2,
 				},
 			},
-			want: `# doner: golang:1.#.#-alpine*
+			want: `# doneram: golang:1.#.#-alpine*
 FROM golang:1.23.5-alpine3.21 as builder`,
 		},
 		{

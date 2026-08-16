@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyleking/doner/internal/parser"
+	"github.com/kyleking/doneram/internal/parser"
 )
 
 func TestExtractHealthcheck(t *testing.T) {

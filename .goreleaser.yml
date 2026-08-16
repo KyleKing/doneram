@@ -5,8 +5,8 @@ before:
     - go mod tidy
 
 builds:
-  - main: ./cmd/doner
-    binary: doner
+  - main: ./cmd/doneram
+    binary: doneram
     env:
       - CGO_ENABLED=0
     goos:
@@ -49,4 +49,4 @@ changelog:
 release:
   github:
     owner: kyleking
-    name: doner
+    name: doneram

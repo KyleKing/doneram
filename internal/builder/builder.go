@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kyleking/doner/internal/parser"
+	"github.com/kyleking/doneram/internal/parser"
 )
 
 // Builder builds and validates Docker images
@@ -77,7 +77,7 @@ func (b *DockerBuilder) Validate(ctx context.Context, imageID string, healthchec
 	}
 
 	// Create a container from the image
-	containerName := fmt.Sprintf("doner-validate-%d", time.Now().Unix())
+	containerName := fmt.Sprintf("doneram-validate-%d", time.Now().Unix())
 	createCmd := exec.CommandContext(ctx, "docker", "create", "--name", containerName, imageID)
 	if output, err := createCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("creating container: %w\nOutput: %s", err, string(output))

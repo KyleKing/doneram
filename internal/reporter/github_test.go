@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kyleking/doner/internal/updater"
+	"github.com/kyleking/doneram/internal/updater"
 )
 
 // withoutGitHubStepSummary blanks GITHUB_STEP_SUMMARY for the duration of the test

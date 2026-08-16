@@ -1,6 +1,6 @@
 # Test Fixtures
 
-Real-world Dockerfile examples for testing doner functionality.
+Real-world Dockerfile examples for testing doneram functionality.
 
 ## Examples
 
@@ -30,11 +30,11 @@ Check all fixtures:
 ```bash
 for f in test/fixtures/*.Dockerfile; do
   echo "=== $f ==="
-  ./bin/doner check -f "$f"
+  ./bin/doneram check -f "$f"
 done
 ```
 
 Check specific fixture:
 ```bash
-./bin/doner check -f test/fixtures/simple-python.Dockerfile
+./bin/doneram check -f test/fixtures/simple-python.Dockerfile
 ```

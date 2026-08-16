@@ -23,7 +23,7 @@ func NewDockerQuerier(verbose bool) *DockerQuerier {
 }
 
 func (q *DockerQuerier) QueryPackages(ctx context.Context, imageID string, queryCmd string) (string, error) {
-	containerName := fmt.Sprintf("doner-query-%d", time.Now().Unix())
+	containerName := fmt.Sprintf("doneram-query-%d", time.Now().Unix())
 
 	createCmd := exec.CommandContext(ctx, "docker", "create", "--name", containerName, imageID, "sh", "-c", queryCmd)
 	if output, err := createCmd.CombinedOutput(); err != nil {

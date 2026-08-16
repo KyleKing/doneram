@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/kyleking/doner/internal/parser"
-	"github.com/kyleking/doner/internal/testutil"
+	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/testutil"
 )
 
 const repologyPath = "/api/v1/project/curl"

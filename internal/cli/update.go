@@ -9,12 +9,12 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/kyleking/doner/internal/builder"
-	"github.com/kyleking/doner/internal/httpclient"
-	"github.com/kyleking/doner/internal/parser"
-	"github.com/kyleking/doner/internal/reporter"
-	"github.com/kyleking/doner/internal/resolver"
-	"github.com/kyleking/doner/internal/updater"
+	"github.com/kyleking/doneram/internal/builder"
+	"github.com/kyleking/doneram/internal/httpclient"
+	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/reporter"
+	"github.com/kyleking/doneram/internal/resolver"
+	"github.com/kyleking/doneram/internal/updater"
 )
 
 func newUpdateCommand() *cli.Command {

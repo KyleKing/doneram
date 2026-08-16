@@ -7,14 +7,14 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/kyleking/doner/internal/httpclient"
+	"github.com/kyleking/doneram/internal/httpclient"
 )
 
 func TestNewAppWiresCommands(t *testing.T) {
 	app := NewApp("1.2.3", "abc123", "2026-01-01")
 
-	if app.Name != "doner" {
-		t.Errorf("app.Name = %q, want doner", app.Name)
+	if app.Name != "doneram" {
+		t.Errorf("app.Name = %q, want doneram", app.Name)
 	}
 	if app.Version != "1.2.3" {
 		t.Errorf("app.Version = %q, want 1.2.3", app.Version)
@@ -39,7 +39,7 @@ func TestSetupLoggingAttachesLogger(t *testing.T) {
 			Flags:  []cli.Flag{&cli.BoolFlag{Name: "verbose"}},
 			Action: func(context.Context, *cli.Command) error { return nil },
 		}
-		args := []string{"doner"}
+		args := []string{"doneram"}
 		if verbose {
 			args = append(args, "--verbose")
 		}
@@ -64,7 +64,7 @@ func TestSetupLoggingAttachesLogger(t *testing.T) {
 
 func TestVersionCommandRuns(t *testing.T) {
 	app := NewApp("1.2.3", "abc123", "2026-01-01")
-	if err := app.Run(context.Background(), []string{"doner", "version"}); err != nil {
+	if err := app.Run(context.Background(), []string{"doneram", "version"}); err != nil {
 		t.Fatalf("running version: %v", err)
 	}
 }

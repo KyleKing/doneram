@@ -48,9 +48,9 @@ CMD ["python", "app.py"]`
 }
 
 func TestParse_WithDirectives(t *testing.T) {
-	content := `# doner: python:3.11.#
+	content := `# doneram: python:3.11.#
 FROM python:3.11.5
-# doner: requests:2.#.#
+# doneram: requests:2.#.#
 RUN pip install requests==2.31.0`
 
 	df, err := Parse(content)
@@ -118,7 +118,7 @@ func TestParse_WithComments(t *testing.T) {
 	content := `# This is a comment
 FROM python:3.11
 # Another comment
-# doner: requests:2.#.#
+# doneram: requests:2.#.#
 RUN pip install requests
 # Final comment`
 
@@ -253,7 +253,7 @@ func TestParseInstruction_Whitespace(t *testing.T) {
 }
 
 func TestParse_ComplexMultiStage(t *testing.T) {
-	content := `# doner: golang:1.21.#
+	content := `# doneram: golang:1.21.#
 FROM golang:1.21.5 AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
@@ -261,7 +261,7 @@ RUN go mod download
 COPY . .
 RUN go build -o app
 
-# doner: alpine:3.19.#
+# doneram: alpine:3.19.#
 FROM alpine:3.19.0
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /build/app /usr/local/bin/app

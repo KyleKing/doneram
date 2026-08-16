@@ -1,9 +1,9 @@
 # Simple Python example for testing basic functionality
 
-# doner: python:3.13.#
+# doneram: python:3.13.#
 FROM python:3.13.11
 
-# doner: ignore
+# doneram: ignore
 COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
 
 WORKDIR /app
