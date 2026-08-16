@@ -124,18 +124,78 @@ forcing every other case through the same syntax.
   and Homebrew tap name all move together, and any local shell aliases or
   mise config referencing `doner` need updating by hand.
 
+## mise as a resolver backend
+
+my_go_template's `copier.yml` now defines fifteen tool versions in one
+place, substituted by jinja into the mise TOML and the workflows, with two
+`PLANNED:` comments pointing here. Those tools span three mise backends
+(core/aqua, `go:`, and `pipx:`), so resolving them one upstream at a time
+means a name-to-repo table doneram has to maintain by hand.
+
+mise already answers all three questions:
+
+- `mise registry hk` returns `aqua:jdx/hk`, the backend and upstream ref.
+  That is the handoff to a native resolver whenever doneram wants stricter
+  control than mise offers.
+- `mise ls-remote <tool>` returns every published version, not just the
+  newest, so the existing `VersionPattern` filter can apply a constraint
+  (hold a major, skip prereleases) that `mise latest` cannot express.
+- `mise latest <tool>` is the cheap path when no constraint applies.
+
+The registry is a name-to-backend mapping bundled with the mise binary, so
+keeping it current means keeping mise current. Version data from
+`ls-remote` is fetched live on every call, so nothing about it goes stale.
+
+Shell out to mise where a tool is in the registry, resolve natively where
+it is not or where the upgrade rule needs to be stricter than a version
+list allows.
+
+## Source of truth and derived files
+
+In a template repo one logical pin exists three times: as
+`default: "1.7.12"` in `copier.yml`, as `{{ actionlint_version }}` in the
+`.jinja` (no version at all), and as a rendered concrete value in the
+`.ctt/` snapshots. Locators target `copier.yml` only. Regenerating the
+snapshots is a post-patch step doneram invokes (copier-template-tester),
+not something the locator model pattern-matches. A locator must therefore
+be able to declare a command that runs after a successful patch.
+
+## Pin shapes to cover
+
+Designing against yak-shears and my_go_template together, the union is:
+
+- bash variable default (`HTMX_VERSION:-1.2.3`)
+- branch-HEAD SHA, where upstream publishes no tags at all (codejar on
+  `master`)
+- HTML marker two lines above a CDN URL
+- trailing `# freshness: hold` on a `pyproject.toml` line
+- `uses: owner/repo@<sha> # v<tag>`, duplicated across four workflow files
+  and patched in all of them together
+- mise TOML tool pin in a generated project
+- `copier.yml` `default:` under a `*_version` key in the template repo
+
+Of these, branch-HEAD SHA, GitHub release, and CDNJS need resolvers that
+do not exist yet.
+
 ## Next steps, in order
 
-1. Design the locator config schema and decide the `.doneram.yml` shape.
+1. Design the locator config schema and decide the `.doneram.yml` shape,
+   against the full union of pin shapes above rather than one repo's.
 2. Extract the regex-capture-and-patch logic Dockerfile parsing currently
    does implicitly into its own package, independent of Dockerfile syntax.
 3. Port GitHub-release, GitHub-commit-by-branch, and CDNJS resolvers into
-   Go, next to the existing npm resolver.
-4. Decide the rename now, before more scaffolding lands, since the module
-   path, repo name, and tap name all touch the same string.
+   Go, next to the existing npm resolver, plus a mise-backed resolver that
+   shells out.
+4. ~~Decide the rename.~~ Done: renamed to doneram, module path, binary,
+   directive prefix, and repo all moved together.
 5. Migrate yak-shears first, since it's the repo the other two copied their
-   `freshness/checkers.py` from. Once its four pin shapes are covered,
-   delete `scripts/freshness/` there and replace it with a config plus a
-   GitHub Action step. Hold off on calcipy_template until yak-shears proves
-   the abstraction, since calcipy_template reproduces this pattern into
-   every project generated from it.
+   `freshness/checkers.py` from, but validate the schema against
+   my_go_template's copier.yml case before writing it. Once yak-shears'
+   pin shapes are covered, delete `scripts/freshness/` there and replace it
+   with a config plus a GitHub Action step. Hold off on calcipy_template
+   until yak-shears proves the abstraction, since calcipy_template
+   reproduces this pattern into every project generated from it.
+
+my_go_template's thirteen newly added pins stay hand-managed until doneram
+can take them. `scripts/check_freshness.py` there watches only `hk` and
+`golangci-lint`, so the rest will drift in the meantime.
