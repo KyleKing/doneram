@@ -83,7 +83,7 @@ current (Dockerfile only):
     for d in directives: resolve(d.package, d.pattern)
 
 target (locator-driven):
-    locators = load_config(".doneram.yml")         # one repo, many files
+    locators = load_config(".doneram.pkl")         # one repo, many files
     for loc in locators:
         for file in glob(loc.glob):
             pin = regex_capture(file, loc.pattern)
@@ -91,7 +91,7 @@ target (locator-driven):
             if latest != pin: patch(file, loc.pattern, latest)
 ```
 
-This needs a project-level config (`.doneram.yml` or similar), since these
+This needs a project-level config (`.doneram.pkl` or similar), since these
 use cases span a whole repo's worth of files, not one Dockerfile passed with
 `-f`. The Dockerfile comment convention can stay as an ergonomic shortcut —
 "any `# doner:`-style comment above a line is sugar for a locator" — without
@@ -205,55 +205,24 @@ version-shaped literal near the same key) and prints ranked candidates, so
 a moved pin is a one-line config fix rather than a hunt. A site that
 legitimately matches several times says so, as hk's `package://` URLs do.
 
-## The config, as it stands
+## Why pkl rather than YAML
 
-`../my_go_template/.doneram.yml` is the first real one. Shape:
+The config has to express a validation command reused across tools and a
+site helper reused across a dozen pins. YAML anchors do that textually, pkl
+does it with typed functions and imports, which is how these repos already
+configure hk. The cost is a `pkl eval -f json` subprocess, and every repo
+here already pins pkl in mise. `../my_go_template/.doneram.pkl` is the
+first real config: 13 tools, 17 sites, every pattern verified to match its
+expected count against the real files.
 
-```yaml
-after_patch: ./sync_with_ctt.sh
-defaults:
-  resolver: mise
-  expect: 1
-tools:
-  golangci-lint:
-    sites:
-      - file: go_template/.config/mise/conf.d/template.toml.jinja
-        pattern: '"golangci-lint" = "([\d.]+)"'
-      - file: go_template/.github/workflows/ci.yml.jinja
-        pattern: 'version: v([\d.]+)'
-  hk:
-    sites:
-      - file: go_template/hk.pkl.jinja
-        pattern: 'download/v([\d.]+)/hk@'
-        expect: 2
-```
-
-`mise_tool` overrides the lookup name where it differs from the tool key
-(`pipx:commitizen`, `go:github.com/golangci/golines`). Fifteen tools, 17
-sites, all patterns verified to match their expected count.
-
-## Next steps, in order
-
-1. Design the locator config schema and decide the `.doneram.yml` shape,
-   against the full union of pin shapes above rather than one repo's.
-2. Extract the regex-capture-and-patch logic Dockerfile parsing currently
-   does implicitly into its own package, independent of Dockerfile syntax.
-3. Port GitHub-release, GitHub-commit-by-branch, and CDNJS resolvers into
-   Go, next to the existing npm resolver, plus a mise-backed resolver that
-   shells out.
-4. ~~Decide the rename.~~ Done: renamed to doneram, module path, binary,
-   directive prefix, and repo all moved together.
-5. Migrate yak-shears first, since it's the repo the other two copied their
-   `freshness/checkers.py` from, but validate the schema against
-   my_go_template's copier.yml case before writing it. Once yak-shears'
-   pin shapes are covered, delete `scripts/freshness/` there and replace it
-   with a config plus a GitHub Action step. Hold off on calcipy_template
-   until yak-shears proves the abstraction, since calcipy_template
-   reproduces this pattern into every project generated from it.
+## Where this leaves the Python scripts
 
 my_go_template no longer defines tool versions in `copier.yml`. They are
-literals in the files that consume them, declared in that repo's
-`.doneram.yml`, and nothing updates them until doneram can. Its
-`check_freshness.py` still patches GitHub Action pins and golangci-lint,
-and reports hk without patching, since hk's version repeats five times and
-`patch_pin` rewrites only the first occurrence.
+literals in the files that consume them, declared in `.doneram.pkl`, and
+nothing updates them until doneram can. Its `check_freshness.py` still
+patches GitHub Action pins and golangci-lint, and reports hk without
+patching, since hk's version repeats five times and `patch_pin` rewrites
+only the first occurrence.
+
+The plan for retiring all of them, with milestones and exit criteria, is in
+[ROADMAP.md](./ROADMAP.md).

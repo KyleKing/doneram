@@ -16,7 +16,7 @@ inputs:
     required: false
     default: 'Dockerfile'
   config:
-    description: 'Path to .doneram.yml config file'
+    description: 'Path to .doneram.pkl config file'
     required: false
   verbose:
     description: 'Enable verbose output'
