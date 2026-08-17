@@ -177,6 +177,61 @@ Designing against yak-shears and my_go_template together, the union is:
 Of these, branch-HEAD SHA, GitHub release, and CDNJS need resolvers that
 do not exist yet.
 
+## Reporting a SHA pin
+
+A version pin compares as a version. A branch-HEAD SHA has no ordering, so
+"outdated" has to be measured a different way. Report three things:
+
+- how far behind, in both commits and time (`8 commits, 4 months behind
+  master`)
+- how old the pinned commit itself is (`pinned commit dated 2025-08-14`),
+  which is the number that says whether anyone is maintaining this
+- a warning when the upstream repo has tags newer than the pinned commit,
+  since tracking a tag is safer than tracking a moving branch
+
+No warning when upstream publishes no tags at all. codejar has none, so
+telling you to use one every run is noise you cannot act on.
+
+## Locators that stop matching
+
+A regex that quietly stops matching is how a pin goes stale without anyone
+noticing, and it is the failure mode the Python scripts have today:
+`extract_pin` returns None and the tool disappears from the report with no
+error. Every site declares how many times it expects to match, defaulting
+to one. A count that doesn't agree fails the run.
+
+On a failed match, doneram rescans the file with a loosened pattern (any
+version-shaped literal near the same key) and prints ranked candidates, so
+a moved pin is a one-line config fix rather than a hunt. A site that
+legitimately matches several times says so, as hk's `package://` URLs do.
+
+## The config, as it stands
+
+`../my_go_template/.doneram.yml` is the first real one. Shape:
+
+```yaml
+after_patch: ./sync_with_ctt.sh
+defaults:
+  resolver: mise
+  expect: 1
+tools:
+  golangci-lint:
+    sites:
+      - file: go_template/.config/mise/conf.d/template.toml.jinja
+        pattern: '"golangci-lint" = "([\d.]+)"'
+      - file: go_template/.github/workflows/ci.yml.jinja
+        pattern: 'version: v([\d.]+)'
+  hk:
+    sites:
+      - file: go_template/hk.pkl.jinja
+        pattern: 'download/v([\d.]+)/hk@'
+        expect: 2
+```
+
+`mise_tool` overrides the lookup name where it differs from the tool key
+(`pipx:commitizen`, `go:github.com/golangci/golines`). Fifteen tools, 17
+sites, all patterns verified to match their expected count.
+
 ## Next steps, in order
 
 1. Design the locator config schema and decide the `.doneram.yml` shape,
@@ -196,6 +251,9 @@ do not exist yet.
    until yak-shears proves the abstraction, since calcipy_template
    reproduces this pattern into every project generated from it.
 
-my_go_template's thirteen newly added pins stay hand-managed until doneram
-can take them. `scripts/check_freshness.py` there watches only `hk` and
-`golangci-lint`, so the rest will drift in the meantime.
+my_go_template no longer defines tool versions in `copier.yml`. They are
+literals in the files that consume them, declared in that repo's
+`.doneram.yml`, and nothing updates them until doneram can. Its
+`check_freshness.py` still patches GitHub Action pins and golangci-lint,
+and reports hk without patching, since hk's version repeats five times and
+`patch_pin` rewrites only the first occurrence.
