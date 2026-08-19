@@ -10,8 +10,10 @@ variable default. Dockerfiles get a comment syntax because a `FROM` line
 reads better with a directive above it than with an entry in a config file.
 Everything else is declared in the repo's config.
 
-The plan and its milestones are in [ROADMAP.md](./ROADMAP.md). The design
-reasoning is in [generalizing.md](./generalizing.md).
+doneram does not resolve dependency graphs, manage lockfiles, or run copier.
+[ROADMAP.md](./ROADMAP.md) draws the full in-scope and out-of-scope line and
+carries the milestones. The design reasoning is in
+[generalizing.md](./generalizing.md).
 
 ## Comment directives
 
@@ -144,6 +146,40 @@ doneram update --skip-build
 `check` never writes. Drift is reported in the output and the JSON summary.
 `--fail-on-drift` makes it an exit code too, for a CI job that should go red
 rather than open a pull request.
+
+## Update policy
+
+Three controls decide whether a newer version is offered, each settable per
+tool with a global default.
+
+The **constraint** is the version pattern above, and a hold narrows it
+further with a ceiling and a reason.
+
+The **minimum release age** keeps doneram from proposing a version that went
+public minutes ago, which is the cheap defense against a compromised or
+immediately-yanked release. The default is 24 hours. Set it to 0 to take
+releases as they land, or raise it where a bad version would be expensive.
+
+**Yanked versions** are checked both ways. doneram never proposes one, and
+reports a currently-pinned version that has since been yanked, because that
+one is already installed everywhere.
+
+## Vulnerabilities
+
+Advisories come from [OSV](https://osv.dev), which covers PyPI, npm, Go,
+crates, and the distro ecosystems (`Debian:12`, `Alpine:v3.19`) that a
+container's package list lands in. For what is inside a base image, doneram
+shells out to trivy or grype, which read the image layers statically rather
+than running the container.
+
+A vulnerable pin reports two candidates, labeled: the minimum patched
+version, and the latest version matching the pin's own pattern. A CVE fix
+waives the minimum release age, and the report says so rather than taking a
+rushed security release quietly.
+
+A hold is never overridden. When the only fix sits above the ceiling, the
+report says held, vulnerable, and no fix underneath it, and leaves the call
+to you.
 
 ## GitHub Action
 
