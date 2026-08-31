@@ -4,7 +4,7 @@ Session context for the doner-to-doneram generalization. Everything below is
 either committed, verified with a command you can rerun, or an open question
 nobody has answered yet. Written 2026-08-27.
 
-Read [ROADMAP.md](./ROADMAP.md) first for the plan, [doneram.md](./doneram.md)
+Read [ROADMAP.md](./ROADMAP.md) first for the plan, [README.md](./README.md)
 for what the tool does, and [generalizing.md](./generalizing.md) for why.
 
 ## Where things stand
