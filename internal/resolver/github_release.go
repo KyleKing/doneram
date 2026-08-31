@@ -50,7 +50,6 @@ type githubRelease struct {
 	Draft      bool   `json:"draft"`
 }
 
-
 func (r *GitHubReleaseResolver) Resolve(ctx context.Context, repo string, pattern *parser.VersionPattern) (string, error) {
 	release, err := r.latestMatchingRelease(ctx, repo, pattern)
 	if err != nil {

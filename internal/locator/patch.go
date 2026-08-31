@@ -22,7 +22,7 @@ func Patch(file, pattern, newValue string) (int, error) {
 	count := 0
 	patched := re.ReplaceAllFunc(content, func(match []byte) []byte {
 		loc := re.FindSubmatchIndex(match)
-		if loc == nil || len(loc) < 4 {
+		if len(loc) < 4 {
 			return match
 		}
 		count++

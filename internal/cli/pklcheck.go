@@ -42,10 +42,10 @@ type pklSummary struct {
 }
 
 type pklSiteSummary struct {
-	Tool            string           `json:"tool"`
-	Current         string           `json:"current,omitempty"`
-	Latest          string           `json:"latest,omitempty"`
-	Updated         bool             `json:"updated"`
+	Tool            string `json:"tool"`
+	Current         string `json:"current,omitempty"`
+	Latest          string `json:"latest,omitempty"`
+	Updated         bool   `json:"updated"`
 	needsUpdate     bool
 	Held            string           `json:"held,omitempty"`
 	Detail          string           `json:"detail,omitempty"`
@@ -331,9 +331,15 @@ func writeSummary(summary pklSummary, outputPath string) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	fmt.Fprintf(f, "has_upgrades=%t\n", summary.HasUpgrades)
-	fmt.Fprintf(f, "title<<DONERAM_EOF\n%s\nDONERAM_EOF\n", summary.Title)
-	fmt.Fprintf(f, "body<<DONERAM_EOF\n%s\nDONERAM_EOF\n", summary.Body)
+	if _, err := fmt.Fprintf(f, "has_upgrades=%t\n", summary.HasUpgrades); err != nil {
+		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
+	}
+	if _, err := fmt.Fprintf(f, "title<<DONERAM_EOF\n%s\nDONERAM_EOF\n", summary.Title); err != nil {
+		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
+	}
+	if _, err := fmt.Fprintf(f, "body<<DONERAM_EOF\n%s\nDONERAM_EOF\n", summary.Body); err != nil {
+		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
+	}
 
 	return nil
 }
