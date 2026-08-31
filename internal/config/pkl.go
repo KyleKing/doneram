@@ -37,6 +37,10 @@ type Tool struct {
 	Hold           *Hold  `json:"hold"`
 	Command        string `json:"command"`
 	CommandPattern string `json:"commandPattern"`
+	// Ecosystem names the OSV ecosystem this tool's pin belongs to (e.g.
+	// "PyPI", "Alpine:v3.19"), needed whenever the resolver name alone
+	// doesn't determine it (a distro package, or a Go module).
+	Ecosystem string `json:"ecosystem"`
 }
 
 // Config is a repo's .doneram.pkl, evaluated to JSON.
@@ -87,6 +91,7 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 				Constraint:     constraint,
 				Command:        tool.Command,
 				CommandPattern: tool.CommandPattern,
+				Ecosystem:      tool.Ecosystem,
 			})
 			continue
 		}
@@ -96,6 +101,7 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 				Tool:         name,
 				ResolverName: tool.ResolverName,
 				Constraint:   constraint,
+				Ecosystem:    tool.Ecosystem,
 				Locator: locator.Locator{
 					Glob:     filepath.Join(baseDir, site.File),
 					Pattern:  site.Pattern,

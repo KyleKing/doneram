@@ -28,6 +28,11 @@ type Site struct {
 
 	Command        string
 	CommandPattern string
+
+	// Ecosystem names the OSV ecosystem a site's pin belongs to (e.g.
+	// "PyPI", "Alpine:v3.19"), overriding the default derived from
+	// Locator.Resolver. Empty skips OSV lookup for the site.
+	Ecosystem string
 }
 
 func (s Site) isCommand() bool {
