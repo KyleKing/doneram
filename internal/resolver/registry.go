@@ -21,5 +21,6 @@ func Registry(client *http.Client) map[string]Resolver {
 		"mise":           NewMiseResolver(),
 		"github-release": NewGitHubReleaseResolver(client),
 		"github-branch":  NewGitHubBranchResolver(client),
+		"cdnjs":          NewCDNJSResolver(client),
 	}
 }
