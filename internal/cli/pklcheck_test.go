@@ -102,6 +102,39 @@ func TestRunCheckPklApplyPatchesAndRunsAfterPatch(t *testing.T) {
 	}
 }
 
+func TestRunCheckPklReportsUpgradesWithoutApplying(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	if err := os.WriteFile(filepath.Join(dir, ".doneram.pkl"), []byte(doneramPklFixtureWithAfterPatch), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "conf.toml"), []byte("jq = \"1.0.0\"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	outputPath := filepath.Join(dir, "summary.json")
+	if err := runApp(t, "check", "--output", outputPath); err != nil {
+		t.Fatalf("check: %v", err)
+	}
+
+	unpatched, err := os.ReadFile(filepath.Join(dir, "conf.toml"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(unpatched), "1.0.0") {
+		t.Errorf("conf.toml was patched without --apply: %s", unpatched)
+	}
+
+	summary, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("ReadFile(summary): %v", err)
+	}
+	if !strings.Contains(string(summary), `"has_upgrades": true`) {
+		t.Errorf("summary = %s, want has_upgrades: true", summary)
+	}
+}
+
 func TestRunCheckPklFailsOnMatchCountMismatch(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

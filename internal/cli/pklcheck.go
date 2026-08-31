@@ -46,6 +46,7 @@ type pklSiteSummary struct {
 	Current         string           `json:"current,omitempty"`
 	Latest          string           `json:"latest,omitempty"`
 	Updated         bool             `json:"updated"`
+	needsUpdate     bool
 	Held            string           `json:"held,omitempty"`
 	Detail          string           `json:"detail,omitempty"`
 	Error           string           `json:"error,omitempty"`
@@ -113,8 +114,9 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 		}
 
 		siteSummary := summarizeSite(result, vuln)
+		siteSummary.needsUpdate = result.Err == nil && siteNeedsPatch(result)
 
-		if apply && result.Err == nil && siteNeedsPatch(result) {
+		if apply && siteSummary.needsUpdate {
 			count, err := patchSite(result)
 			if err != nil {
 				fmt.Printf("✗ %s: patch failed: %v\n", result.Site.Tool, err)
@@ -280,7 +282,7 @@ func runAfterPatch(ctx context.Context, command, baseDir string) error {
 func finishSummary(summary *pklSummary) {
 	var updated []pklSiteSummary
 	for _, s := range summary.Results {
-		if s.Updated {
+		if s.Updated || s.needsUpdate {
 			updated = append(updated, s)
 		}
 	}
