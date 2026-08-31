@@ -98,6 +98,19 @@ tools: Mapping<String, Tool> = new {
     resolverName = "goreleaser/goreleaser-action"
     sites = new { actionPin("goreleaser/goreleaser-action", bumpYml, 1) }
   }
+  ["mise-action"] = new {
+    resolver = "github-action"
+    resolverName = "jdx/mise-action"
+    sites = new { actionPin("jdx/mise-action", ciYml, 1) }
+  }
+  ["pkl"] = new {
+    sites = new {
+      new Site {
+        file = miseToml
+        pattern = #"pkl = "([\d.]+)""#
+      }
+    }
+  }
   ["setup-go"] = new {
     resolver = "github-action"
     resolverName = "actions/setup-go"
