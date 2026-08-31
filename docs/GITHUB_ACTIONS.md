@@ -1,8 +1,8 @@
 # Using Doneram in GitHub Actions
 
-## Manual Installation
+## Installation
 
-Install the binary directly in your GitHub Actions workflow:
+Install a pinned release binary onto `PATH` with the composite action:
 
 ```yaml
 name: Check Dockerfile Updates
@@ -17,19 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Doneram
-        run: |
-          VERSION=v1.0.0  # Or use 'latest' from releases
-          ARCH=$(uname -m)
-          case $ARCH in
-            x86_64) ARCH="amd64" ;;
-            aarch64|arm64) ARCH="arm64" ;;
-          esac
-          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-
-          URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/doneram_${VERSION#v}_${OS}_${ARCH}.tar.gz"
-          curl -sL "$URL" | tar xz -C /usr/local/bin
-          chmod +x /usr/local/bin/doneram
+      - uses: kyleking/doneram@v1
 
       - name: Check for updates
         run: doneram check -f Dockerfile --verbose
@@ -61,24 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Doneram
-        run: |
-          VERSION=latest
-          ARCH=$(uname -m)
-          case $ARCH in
-            x86_64) ARCH="amd64" ;;
-            aarch64|arm64) ARCH="arm64" ;;
-          esac
-          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-
-          # Get latest release if VERSION=latest
-          if [ "$VERSION" = "latest" ]; then
-            VERSION=$(curl -s https://api.github.com/repos/kyleking/doneram/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-          fi
-
-          URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/doneram_${VERSION#v}_${OS}_${ARCH}.tar.gz"
-          curl -sL "$URL" | tar xz -C /usr/local/bin
-          chmod +x /usr/local/bin/doneram
+      - uses: kyleking/doneram@v1
 
       - name: Update Dockerfiles
         run: doneram update -f Dockerfile --format json > updates.json

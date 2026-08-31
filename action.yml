@@ -1,5 +1,5 @@
-name: 'Doneram - Dockerfile Maintainer'
-description: 'Automated Dockerfile version updater that validates changes via Docker build'
+name: 'doneram'
+description: 'Install a pinned doneram release binary onto PATH'
 author: 'kyleking'
 
 branding:
@@ -7,83 +7,56 @@ branding:
   color: 'orange'
 
 inputs:
-  command:
-    description: 'Command to run (check, update)'
-    required: false
-    default: 'check'
-  file:
-    description: 'Path to Dockerfile'
-    required: false
-    default: 'Dockerfile'
-  config:
-    description: 'Path to .doneram.pkl config file'
-    required: false
-  verbose:
-    description: 'Enable verbose output'
-    required: false
-    default: 'false'
   version:
-    description: 'Doneram version to use (default: latest)'
+    description: 'doneram version to install (default: latest release)'
     required: false
     default: 'latest'
-
-outputs:
-  updates-available:
-    description: 'Whether updates are available (true/false)'
-    value: ${{ steps.run.outputs.updates-available }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Determine version
+    - name: Resolve version
       id: version
       shell: bash
       run: |
+        set -euo pipefail
         if [ "${{ inputs.version }}" = "latest" ]; then
-          VERSION=$(curl -s https://api.github.com/repos/kyleking/doneram/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION=$(curl -fsSL https://api.github.com/repos/kyleking/doneram/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
         else
           VERSION="${{ inputs.version }}"
         fi
-        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-    - name: Download doneram
+    - name: Install doneram
       shell: bash
       run: |
-        VERSION="${{ steps.version.outputs.version }}"
-        ARCH=$(uname -m)
-        case $ARCH in
-          x86_64) ARCH="amd64" ;;
-          aarch64|arm64) ARCH="arm64" ;;
+        set -euo pipefail
+        case "${{ runner.os }}" in
+          Linux) OS=linux ;;
+          macOS) OS=darwin ;;
+          Windows) OS=windows ;;
+          *) echo "unsupported runner.os: ${{ runner.os }}" >&2; exit 1 ;;
         esac
-        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        case "${{ runner.arch }}" in
+          X64) ARCH=amd64 ;;
+          ARM64) ARCH=arm64 ;;
+          *) echo "unsupported runner.arch: ${{ runner.arch }}" >&2; exit 1 ;;
+        esac
 
-        URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/doneram_${VERSION#v}_${OS}_${ARCH}.tar.gz"
-        echo "Downloading doneram from: $URL"
-        curl -sL "$URL" | tar xz -C /usr/local/bin
-        chmod +x /usr/local/bin/doneram
-
-    - name: Run doneram
-      id: run
-      shell: bash
-      run: |
-        ARGS="${{ inputs.command }}"
-
-        if [ -n "${{ inputs.file }}" ]; then
-          ARGS="$ARGS -f ${{ inputs.file }}"
+        VERSION="${{ steps.version.outputs.version }}"
+        BIN="doneram-${OS}-${ARCH}"
+        DEST_DIR="${RUNNER_TEMP}/doneram-bin"
+        DEST="${DEST_DIR}/doneram"
+        if [ "$OS" = "windows" ]; then
+          BIN="${BIN}.exe"
+          DEST="${DEST}.exe"
         fi
 
-        if [ -n "${{ inputs.config }}" ]; then
-          ARGS="$ARGS -c ${{ inputs.config }}"
-        fi
+        URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/${BIN}"
+        echo "Installing doneram ${VERSION} from ${URL}"
 
-        if [ "${{ inputs.verbose }}" = "true" ]; then
-          ARGS="$ARGS -v"
-        fi
+        mkdir -p "$DEST_DIR"
+        curl -fsSL -o "$DEST" "$URL"
+        chmod +x "$DEST"
 
-        doneram $ARGS
-
-        if [ $? -eq 0 ]; then
-          echo "updates-available=true" >> $GITHUB_OUTPUT
-        else
-          echo "updates-available=false" >> $GITHUB_OUTPUT
-        fi
+        echo "$DEST_DIR" >> "$GITHUB_PATH"
