@@ -1,9 +1,14 @@
-package locator
+// Package engine ties a locator to a resolver: finding a pin, enforcing its
+// match count, and resolving its latest version. Both front ends (the
+// Dockerfile directive parser and the pkl config loader) compile down to
+// []Site and run through the same RunSites.
+package engine
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/parser"
 	"github.com/kyleking/doneram/internal/resolver"
 )
@@ -13,7 +18,7 @@ import (
 // version constraint (defaulting to "#.#.#", any version).
 type Site struct {
 	Tool         string
-	Locator      Locator
+	Locator      locator.Locator
 	ResolverName string
 	Constraint   *parser.VersionPattern
 }
@@ -35,7 +40,7 @@ func (s Site) constraint() *parser.VersionPattern {
 // SiteResult is the outcome of finding and resolving one Site.
 type SiteResult struct {
 	Site    Site
-	Matches []Match
+	Matches []locator.Match
 	Latest  string
 	Err     error
 }
@@ -53,7 +58,7 @@ func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup) []SiteRe
 	for _, s := range sites {
 		result := SiteResult{Site: s}
 
-		matches, err := Find(s.Locator)
+		matches, err := locator.Find(s.Locator)
 		if err != nil {
 			result.Err = err
 			results = append(results, result)
@@ -61,7 +66,7 @@ func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup) []SiteRe
 		}
 		result.Matches = matches
 
-		if err := CheckExpect(s.Locator, matches); err != nil {
+		if err := locator.CheckExpect(s.Locator, matches); err != nil {
 			result.Err = err
 			results = append(results, result)
 			continue

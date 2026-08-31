@@ -1,4 +1,4 @@
-package locator
+package engine
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/parser"
 	"github.com/kyleking/doneram/internal/resolver"
 )
@@ -43,7 +44,7 @@ func TestRunSitesResolvesLatest(t *testing.T) {
 
 	sites := []Site{{
 		Tool:    "jq",
-		Locator: Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise"},
+		Locator: locator.Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise"},
 	}}
 
 	results := RunSites(context.Background(), sites, lookupWith("mise", &fakeResolver{version: "1.7.2"}))
@@ -68,7 +69,7 @@ func TestRunSitesReportsUnavailableResolverWithoutCrashing(t *testing.T) {
 
 	sites := []Site{{
 		Tool:    "jq",
-		Locator: Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise"},
+		Locator: locator.Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise"},
 	}}
 
 	results := RunSites(context.Background(), sites, func(string) (resolver.Resolver, bool) { return nil, false })
@@ -91,7 +92,7 @@ func TestRunSitesReportsMismatchWithoutCallingResolver(t *testing.T) {
 	r := &fakeResolver{version: "9.9.9"}
 	sites := []Site{{
 		Tool:    "jq",
-		Locator: Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise", Expect: 1},
+		Locator: locator.Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise", Expect: 1},
 	}}
 
 	results := RunSites(context.Background(), sites, lookupWith("mise", r))

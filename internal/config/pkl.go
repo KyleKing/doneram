@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/locator"
 )
 
@@ -60,10 +61,10 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Sites compiles every tool's sites into locator.Sites, with file paths
+// Sites compiles every tool's sites into engine.Sites, with file paths
 // resolved relative to baseDir, in a stable order.
-func (c *Config) Sites(baseDir string) []locator.Site {
-	var out []locator.Site
+func (c *Config) Sites(baseDir string) []engine.Site {
+	var out []engine.Site
 
 	names := make([]string, 0, len(c.Tools))
 	for name := range c.Tools {
@@ -74,7 +75,7 @@ func (c *Config) Sites(baseDir string) []locator.Site {
 	for _, name := range names {
 		tool := c.Tools[name]
 		for _, site := range tool.Sites {
-			out = append(out, locator.Site{
+			out = append(out, engine.Site{
 				Tool:         name,
 				ResolverName: tool.ResolverName,
 				Locator: locator.Locator{
