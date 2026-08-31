@@ -50,10 +50,21 @@ type githubRelease struct {
 }
 
 func (r *GitHubReleaseResolver) Resolve(ctx context.Context, repo string, pattern *parser.VersionPattern) (string, error) {
+	release, err := r.latestMatchingRelease(ctx, repo, pattern)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(release.TagName, "v"), nil
+}
+
+// latestMatchingRelease returns the newest stable release matching pattern,
+// tag name intact (e.g. "v4.3.0"), for a caller that needs the raw tag
+// rather than the version Resolve trims it down to.
+func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo string, pattern *parser.VersionPattern) (githubRelease, error) {
 	logger := httpclient.LoggerFromContext(ctx)
 	owner, name, err := splitOwnerRepo(repo)
 	if err != nil {
-		return "", err
+		return githubRelease{}, err
 	}
 	logger.Debug("resolving repo", "resolver", "github-release", "repo", repo)
 
@@ -61,7 +72,7 @@ func (r *GitHubReleaseResolver) Resolve(ctx context.Context, repo string, patter
 	releases, err := getGitHubJSON[[]githubRelease](ctx, r.client, url)
 	if err != nil {
 		logger.Warn("failed to fetch releases", "repo", repo, "error", err)
-		return "", fmt.Errorf("fetching releases for %s: %w", repo, err)
+		return githubRelease{}, fmt.Errorf("fetching releases for %s: %w", repo, err)
 	}
 
 	for _, release := range releases {
@@ -71,11 +82,11 @@ func (r *GitHubReleaseResolver) Resolve(ctx context.Context, repo string, patter
 		}
 		if pattern.Matches(tag) {
 			logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", tag)
-			return tag, nil
+			return release, nil
 		}
 	}
 
-	return "", fmt.Errorf("no matching stable release found for %s with pattern %v", repo, pattern)
+	return githubRelease{}, fmt.Errorf("no matching stable release found for %s with pattern %v", repo, pattern)
 }
 
 func (r *GitHubReleaseResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {
