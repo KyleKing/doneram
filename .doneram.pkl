@@ -34,7 +34,7 @@ class Tool {
 }
 
 local ciYml = ".github/workflows/ci.yml"
-local releaseYml = ".github/workflows/release.yml"
+local bumpYml = ".github/workflows/bump_version.yml"
 local miseToml = "mise.toml"
 
 /// A `uses: owner/repo@<sha> # <tag>` GitHub Action pin, one capture group
@@ -52,7 +52,17 @@ tools: Mapping<String, Tool> = new {
     resolverName = "actions/checkout"
     sites = new {
       actionPin("actions/checkout", ciYml, 2)
-      actionPin("actions/checkout", releaseYml, 1)
+      actionPin("actions/checkout", bumpYml, 1)
+    }
+  }
+  ["commitizen-action"] = new {
+    resolver = "github-branch"
+    resolverName = "commitizen-tools/commitizen-action@master"
+    sites = new {
+      new Site {
+        file = bumpYml
+        pattern = #"commitizen-tools/commitizen-action@([0-9a-f]{40}) # master"#
+      }
     }
   }
   ["go"] = new {
@@ -62,10 +72,6 @@ tools: Mapping<String, Tool> = new {
         file = ciYml
         pattern = #"go-version: '([\d.]+)'"#
         expect = 2
-      }
-      new Site {
-        file = releaseYml
-        pattern = #"go-version: '([\d.]+)'"#
       }
     }
   }
@@ -90,14 +96,14 @@ tools: Mapping<String, Tool> = new {
   ["goreleaser-action"] = new {
     resolver = "github-action"
     resolverName = "goreleaser/goreleaser-action"
-    sites = new { actionPin("goreleaser/goreleaser-action", releaseYml, 1) }
+    sites = new { actionPin("goreleaser/goreleaser-action", bumpYml, 1) }
   }
   ["setup-go"] = new {
     resolver = "github-action"
     resolverName = "actions/setup-go"
     sites = new {
       actionPin("actions/setup-go", ciYml, 2)
-      actionPin("actions/setup-go", releaseYml, 1)
+      actionPin("actions/setup-go", bumpYml, 1)
     }
   }
   ["upload-artifact"] = new {

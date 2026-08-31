@@ -17,7 +17,7 @@ carries the milestones. The design reasoning is in
 
 ## Installation
 
-### Homebrew (coming soon)
+### Homebrew
 
 ```bash
 brew install kyleking/tap/doneram
