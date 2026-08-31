@@ -41,6 +41,10 @@ type Tool struct {
 	Hold           *Hold  `json:"hold"`
 	Command        string `json:"command"`
 	CommandPattern string `json:"commandPattern"`
+	// Pattern overrides the default "#.#.#" version constraint, for a pin
+	// that only ever ships with a suffix (a prerelease a project tracks on
+	// purpose, e.g. "4.0.0-alpha.*").
+	Pattern string `json:"pattern"`
 	// Ecosystem names the OSV ecosystem this tool's pin belongs to (e.g.
 	// "PyPI", "Alpine:v3.19"), needed whenever the resolver name alone
 	// doesn't determine it (a distro package, or a Go module).
@@ -120,14 +124,22 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 	return out
 }
 
-// constraint builds the version constraint a hold narrows, or nil when the
-// tool has no hold and should take engine's unconstrained default.
+// constraint builds the version constraint a hold narrows or a custom
+// Pattern replaces, or nil when the tool declares neither and should take
+// engine's unconstrained "#.#.#" default.
 func (t Tool) constraint() *parser.VersionPattern {
-	if t.Hold == nil || t.Hold.Max == nil {
+	if t.Pattern == "" && (t.Hold == nil || t.Hold.Max == nil) {
 		return nil
 	}
-	p := parser.ParsePattern("#.#.#")
-	p.Ceiling = *t.Hold.Max
-	p.HoldReason = t.Hold.Reason
+
+	base := "#.#.#"
+	if t.Pattern != "" {
+		base = t.Pattern
+	}
+	p := parser.ParsePattern(base)
+	if t.Hold != nil && t.Hold.Max != nil {
+		p.Ceiling = *t.Hold.Max
+		p.HoldReason = t.Hold.Reason
+	}
 	return p
 }

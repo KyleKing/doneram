@@ -125,6 +125,14 @@ number of consecutive lines the pattern matches against at once. The
 pattern must anchor on text unique to that window, or an occurrence can be
 counted twice across overlapping windows.
 
+A tool's constraint defaults to `#.#.#`, taking any release without a
+suffix. A pin that only ever ships with one, a prerelease tracked on
+purpose because upstream hasn't cut a stable release yet, sets `pattern` to
+override it: `4.0.0-alpha.*` keeps taking newer alphas of that exact
+version and ignores everything else, the same wildcard syntax the
+Dockerfile directive uses. A `hold`'s ceiling narrows whichever pattern is
+in effect, custom or default.
+
 `afterPatch` runs after a successful patch. In a template repo it
 regenerates the rendered output, so a pin and its snapshots never diverge.
 

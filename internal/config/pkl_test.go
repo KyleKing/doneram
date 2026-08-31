@@ -146,6 +146,28 @@ func TestToolConstraintFromHold(t *testing.T) {
 	}
 }
 
+func TestToolConstraintFromPattern(t *testing.T) {
+	tool := Tool{Pattern: "4.0.0-alpha.*"}
+
+	constraint := tool.constraint()
+	if constraint == nil {
+		t.Fatal("constraint() = nil, want a pattern-bounded constraint")
+	}
+	if !constraint.Matches("4.0.0-alpha.9") {
+		t.Errorf("constraint should match 4.0.0-alpha.9")
+	}
+	if constraint.Matches("4.0.0") {
+		t.Errorf("constraint should not match the plain 4.0.0 release")
+	}
+
+	max := "5.0.0"
+	held := Tool{Pattern: "4.0.0-alpha.*", Hold: &Hold{Reason: "tracking prettier 4's alpha", Max: &max}}
+	heldConstraint := held.constraint()
+	if heldConstraint.Ceiling != "5.0.0" {
+		t.Errorf("Ceiling = %q, want 5.0.0", heldConstraint.Ceiling)
+	}
+}
+
 func TestSitesEmitsCommandSite(t *testing.T) {
 	cfg := &Config{
 		Tools: map[string]Tool{
