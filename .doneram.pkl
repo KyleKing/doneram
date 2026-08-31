@@ -1,0 +1,108 @@
+// doneram's own pinned versions, checked with doneram itself. Each site is a
+// literal in a file that consumes it. go.mod's own module directives are out
+// of scope: doneram doesn't manage Go module dependency versions, only
+// literal pins in text files.
+//
+// A site that matches a different number of times than `expect` fails the
+// run. A pattern that silently stops matching is how a pin goes stale
+// unnoticed.
+//
+// The schema is inlined so this file evaluates today. It amends doneram's
+// published Config.pkl once doneram ships a pkl package.
+
+class Site {
+  /// Repo-relative path to the file holding the literal.
+  file: String
+  /// Regex with exactly one capture group around the version.
+  pattern: String
+  expect: Int(this > 0) = 1
+}
+
+/// Keeps taking updates below `max`, so a known break blocks only the majors
+/// past it rather than freezing the pin.
+class Hold {
+  reason: String
+  max: String?
+}
+
+class Tool {
+  resolver: String = "mise"
+  /// Name to query when it differs from the map key, e.g. "pipx:commitizen".
+  resolverName: String?
+  sites: Listing<Site>
+  hold: Hold?
+}
+
+local ciYml = ".github/workflows/ci.yml"
+local releaseYml = ".github/workflows/release.yml"
+local miseToml = "mise.toml"
+
+/// A `uses: owner/repo@<sha> # <tag>` GitHub Action pin, one capture group
+/// spanning the sha and the tag together, since github-action patches both
+/// as a single resolved value.
+local function actionPin(action: String, sourceFile: String, count: Int): Site = new {
+  file = sourceFile
+  pattern = #"\#(action)@([0-9a-f]{40} # v[\d.]+)"#
+  expect = count
+}
+
+tools: Mapping<String, Tool> = new {
+  ["checkout"] = new {
+    resolver = "github-action"
+    resolverName = "actions/checkout"
+    sites = new {
+      actionPin("actions/checkout", ciYml, 2)
+      actionPin("actions/checkout", releaseYml, 1)
+    }
+  }
+  ["go"] = new {
+    resolverName = "go"
+    sites = new {
+      new Site {
+        file = ciYml
+        pattern = #"go-version: '([\d.]+)'"#
+        expect = 2
+      }
+      new Site {
+        file = releaseYml
+        pattern = #"go-version: '([\d.]+)'"#
+      }
+    }
+  }
+  ["golangci-lint"] = new {
+    resolverName = "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
+    sites = new {
+      new Site {
+        file = miseToml
+        pattern = #""go:github\.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "([\d.]+)""#
+      }
+      new Site {
+        file = ciYml
+        pattern = #"version: v([\d.]+)"#
+      }
+    }
+  }
+  ["golangci-lint-action"] = new {
+    resolver = "github-action"
+    resolverName = "golangci/golangci-lint-action"
+    sites = new { actionPin("golangci/golangci-lint-action", ciYml, 1) }
+  }
+  ["goreleaser-action"] = new {
+    resolver = "github-action"
+    resolverName = "goreleaser/goreleaser-action"
+    sites = new { actionPin("goreleaser/goreleaser-action", releaseYml, 1) }
+  }
+  ["setup-go"] = new {
+    resolver = "github-action"
+    resolverName = "actions/setup-go"
+    sites = new {
+      actionPin("actions/setup-go", ciYml, 2)
+      actionPin("actions/setup-go", releaseYml, 1)
+    }
+  }
+  ["upload-artifact"] = new {
+    resolver = "github-action"
+    resolverName = "actions/upload-artifact"
+    sites = new { actionPin("actions/upload-artifact", ciYml, 1) }
+  }
+}
