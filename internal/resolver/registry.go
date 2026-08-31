@@ -4,8 +4,7 @@ import "net/http"
 
 // Registry returns every resolver kind doneram can construct today, keyed
 // by the name a locator's Resolver field names. A kind absent from this map
-// (mise, GitHub release, GitHub branch, CDNJS, a command resolver) is not
-// implemented yet; callers report that rather than crashing.
+// is not implemented yet; callers report that rather than crashing.
 func Registry(client *http.Client) map[string]Resolver {
 	return map[string]Resolver{
 		"npm":       NewNPMResolver(client),
@@ -19,5 +18,6 @@ func Registry(client *http.Client) map[string]Resolver {
 		"docker":    NewDockerHubResolver(client),
 		"dockerhub": NewDockerHubResolver(client),
 		"ghcr":      NewGHCRResolver(client),
+		"mise":      NewMiseResolver(),
 	}
 }
