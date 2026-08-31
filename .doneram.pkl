@@ -101,7 +101,10 @@ tools: Mapping<String, Tool> = new {
   ["mise-action"] = new {
     resolver = "github-action"
     resolverName = "jdx/mise-action"
-    sites = new { actionPin("jdx/mise-action", ciYml, 1) }
+    sites = new {
+      actionPin("jdx/mise-action", ciYml, 1)
+      actionPin("jdx/mise-action", bumpYml, 1)
+    }
   }
   ["pkl"] = new {
     sites = new {
