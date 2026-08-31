@@ -20,6 +20,10 @@ type Site struct {
 	File    string `json:"file"`
 	Pattern string `json:"pattern"`
 	Expect  int    `json:"expect"`
+	// Window is how many consecutive lines Pattern matches against at
+	// once, for a version tied to context on another line (a pre-commit
+	// hook's rev under its repo URL). Defaults to 1.
+	Window int `json:"window"`
 }
 
 // Hold narrows a tool's constraint with a ceiling and the reason for it.
@@ -107,6 +111,7 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 					Pattern:  site.Pattern,
 					Resolver: tool.Resolver,
 					Expect:   site.Expect,
+					Window:   site.Window,
 				},
 			})
 		}

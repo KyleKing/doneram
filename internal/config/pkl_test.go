@@ -82,6 +82,50 @@ func TestLoadAndCompileSites(t *testing.T) {
 	}
 }
 
+func TestSitesCarriesWindow(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".doneram.pkl")
+	pkl := `
+class Site {
+  file: String
+  pattern: String
+  expect: Int(this > 0) = 1
+  window: Int(this > 0) = 1
+}
+
+class Tool {
+  resolver: String = "mise"
+  resolverName: String?
+  sites: Listing<Site>
+}
+
+tools: Mapping<String, Tool> = new {
+  ["pre-commit-hooks"] = new {
+    sites = new {
+      new Site {
+        file = ".pre-commit-config.yaml"
+        pattern = #"repo: https://github\.com/pre-commit/pre-commit-hooks\n\s*rev: (v[\d.]+)"#
+        window = 2
+      }
+    }
+  }
+}
+`
+	if err := os.WriteFile(path, []byte(pkl), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	sites := cfg.Sites(dir)
+	if len(sites) != 1 || sites[0].Locator.Window != 2 {
+		t.Fatalf("Sites = %+v, want one site with Locator.Window = 2", sites)
+	}
+}
+
 func TestToolConstraintFromHold(t *testing.T) {
 	max := "3.0.0"
 	tool := Tool{Hold: &Hold{Reason: "cgo breaks on 3.0", Max: &max}}

@@ -119,6 +119,12 @@ that disagrees fails the run, because a regex that quietly stops matching is
 how a pin goes stale without anyone noticing. On a failed match doneram
 rescans with a loosened pattern and prints ranked candidates.
 
+A site whose version sits on a different line than the text that identifies
+it, a pre-commit hook's `rev:` under its `repo:` URL, sets `window` to the
+number of consecutive lines the pattern matches against at once. The
+pattern must anchor on text unique to that window, or an occurrence can be
+counted twice across overlapping windows.
+
 `afterPatch` runs after a successful patch. In a template repo it
 regenerates the rendered output, so a pin and its snapshots never diverge.
 

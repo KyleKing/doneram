@@ -43,6 +43,28 @@ func TestFindAcrossGlob(t *testing.T) {
 	}
 }
 
+func TestFindWithWindowMatchesAcrossLines(t *testing.T) {
+	dir := t.TempDir()
+	content := "repos:\n" +
+		"  - repo: https://github.com/pre-commit/pre-commit-hooks\n" +
+		"    rev: v4.5.0\n" +
+		"  - repo: https://github.com/psf/black\n" +
+		"    rev: v24.1.0\n"
+	path := writeFile(t, dir, ".pre-commit-config.yaml", content)
+
+	matches, err := Find(Locator{
+		Glob:    path,
+		Pattern: `repo: https://github\.com/pre-commit/pre-commit-hooks\n\s*rev: (v[\d.]+)`,
+		Window:  2,
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Value != "v4.5.0" || matches[0].Line != 2 {
+		t.Fatalf("matches = %+v, want one match of v4.5.0 on line 2", matches)
+	}
+}
+
 func TestFindRejectsPatternWithoutExactlyOneCapture(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "conf.toml", "actionlint = \"1.7.12\"\n")
@@ -114,6 +136,35 @@ func TestPatchRewritesEveryOccurrence(t *testing.T) {
 	}
 	if got := string(content); got != "download/v1.1.0/hk@\nhk@1.0.0#\n" {
 		t.Errorf("content = %q", got)
+	}
+}
+
+func TestPatchRewritesAcrossLines(t *testing.T) {
+	dir := t.TempDir()
+	content := "  - repo: https://github.com/pre-commit/pre-commit-hooks\n" +
+		"    rev: v4.5.0\n" +
+		"  - repo: https://github.com/psf/black\n" +
+		"    rev: v24.1.0\n"
+	path := writeFile(t, dir, ".pre-commit-config.yaml", content)
+
+	count, err := Patch(path, `repo: https://github\.com/pre-commit/pre-commit-hooks\n\s*rev: (v[\d.]+)`, "v4.6.0")
+	if err != nil {
+		t.Fatalf("Patch: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+
+	patched, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	want := "  - repo: https://github.com/pre-commit/pre-commit-hooks\n" +
+		"    rev: v4.6.0\n" +
+		"  - repo: https://github.com/psf/black\n" +
+		"    rev: v24.1.0\n"
+	if got := string(patched); got != want {
+		t.Errorf("content = %q, want %q", got, want)
 	}
 }
 

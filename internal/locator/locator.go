@@ -18,6 +18,13 @@ type Locator struct {
 	Pattern  string // regex with exactly one capture group around the version
 	Resolver string // resolver kind, e.g. "npm", "docker", "mise"
 	Expect   int    // expected match count; zero or negative defaults to 1
+	// Window is how many consecutive lines Pattern is matched against at
+	// once, for a version tied to context on another line (a pre-commit
+	// hook's rev under its repo URL). Zero or negative defaults to 1.
+	// Pattern must anchor on text unique to its window (e.g. a specific
+	// repo URL), or an occurrence can be double-counted across overlapping
+	// windows.
+	Window int
 }
 
 // ExpectedCount returns Expect, defaulting to 1.
@@ -26,6 +33,14 @@ func (l Locator) ExpectedCount() int {
 		return 1
 	}
 	return l.Expect
+}
+
+// WindowSize returns Window, defaulting to 1.
+func (l Locator) WindowSize() int {
+	if l.Window <= 0 {
+		return 1
+	}
+	return l.Window
 }
 
 // Match is one capture-group occurrence found by Find.
@@ -48,6 +63,8 @@ func Find(l Locator) ([]Match, error) {
 		return nil, fmt.Errorf("globbing %q: %w", l.Glob, err)
 	}
 
+	window := l.WindowSize()
+
 	var matches []Match
 	for _, file := range files {
 		content, err := os.ReadFile(file)
@@ -55,8 +72,10 @@ func Find(l Locator) ([]Match, error) {
 			return nil, fmt.Errorf("reading %s: %w", file, err)
 		}
 
-		for i, line := range strings.Split(string(content), "\n") {
-			for _, m := range re.FindAllStringSubmatch(line, -1) {
+		lines := strings.Split(string(content), "\n")
+		for i := 0; i+window <= len(lines); i++ {
+			block := strings.Join(lines[i:i+window], "\n")
+			for _, m := range re.FindAllStringSubmatch(block, -1) {
 				matches = append(matches, Match{File: file, Line: i + 1, Value: m[1]})
 			}
 		}
