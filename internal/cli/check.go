@@ -48,6 +48,12 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 	format := cmd.String("format")
 	workers := cmd.Int("workers")
 
+	if len(patterns) == 0 {
+		if path, ok := findDoneramConfig(); ok {
+			return runCheckPkl(ctx, path)
+		}
+	}
+
 	// Expand file patterns
 	files, err := expandFiles(patterns)
 	if err != nil {
