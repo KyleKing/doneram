@@ -1,3 +1,9 @@
+## v0.2.1 (2026-08-31)
+
+### Fix
+
+- satisfy golangci-lint (gofmt, errcheck, staticcheck)
+
 ## v0.2.0 (2026-08-31)
 
 ### Feat
