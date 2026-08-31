@@ -50,6 +50,7 @@ type githubRelease struct {
 	Draft      bool   `json:"draft"`
 }
 
+
 func (r *GitHubReleaseResolver) Resolve(ctx context.Context, repo string, pattern *parser.VersionPattern) (string, error) {
 	release, err := r.latestMatchingRelease(ctx, repo, pattern)
 	if err != nil {
@@ -76,6 +77,38 @@ func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo 
 		return githubRelease{}, fmt.Errorf("fetching releases for %s: %w", repo, err)
 	}
 
+	if best, bestTag, ok := bestRelease(releases, pattern); ok {
+		logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", bestTag)
+		return best, nil
+	}
+
+	// Some projects (mdformat, shellcheck-py, mirrors-prettier) tag every
+	// version but never cut a GitHub Release, so /releases comes back
+	// empty and the pin has to fall back to /tags.
+	tagsURL := fmt.Sprintf("%s/repos/%s/%s/tags?per_page=30", r.baseURL, owner, name)
+	tags, err := getGitHubJSON[[]githubTag](ctx, r.client, tagsURL)
+	if err != nil {
+		logger.Warn("failed to fetch tags", "repo", repo, "error", err)
+		return githubRelease{}, fmt.Errorf("no matching stable release found for %s with pattern %v", repo, pattern)
+	}
+
+	asReleases := make([]githubRelease, len(tags))
+	for i, t := range tags {
+		asReleases[i] = githubRelease{TagName: t.Name}
+	}
+	if best, bestTag, ok := bestRelease(asReleases, pattern); ok {
+		logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", bestTag, "source", "tags")
+		return best, nil
+	}
+
+	return githubRelease{}, fmt.Errorf("no matching stable release found for %s with pattern %v", repo, pattern)
+}
+
+// bestRelease returns the highest version among releases matching pattern,
+// skipping prereleases and drafts. GitHub lists releases by creation date,
+// not version order, so a backported release of an old tag can sort above
+// a newer one.
+func bestRelease(releases []githubRelease, pattern *parser.VersionPattern) (githubRelease, string, bool) {
 	var best githubRelease
 	var bestTag string
 	found := false
@@ -87,18 +120,11 @@ func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo 
 		if !pattern.Matches(tag) {
 			continue
 		}
-		// GitHub lists releases by creation date, not version order, so a
-		// backported release of an old tag can sort above a newer one.
 		if !found || version.Compare(version.Parse(tag), version.Parse(bestTag)) > 0 {
 			best, bestTag, found = release, tag, true
 		}
 	}
-
-	if !found {
-		return githubRelease{}, fmt.Errorf("no matching stable release found for %s with pattern %v", repo, pattern)
-	}
-	logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", bestTag)
-	return best, nil
+	return best, bestTag, found
 }
 
 func (r *GitHubReleaseResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {

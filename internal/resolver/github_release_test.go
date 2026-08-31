@@ -43,6 +43,23 @@ func TestGitHubReleaseResolver_IgnoresBackportedOldTagListedFirst(t *testing.T) 
 	}
 }
 
+func TestGitHubReleaseResolver_FallsBackToTagsWhenNoReleasesExist(t *testing.T) {
+	server := testutil.NewMockServer(map[string]http.HandlerFunc{
+		"/repos/owner/repo/releases": testutil.FixtureHandler("api/github/releases_empty.json"),
+		"/repos/owner/repo/tags":     testutil.FixtureHandler("api/github/tags_only.json"),
+	})
+	defer server.Close()
+
+	r := NewGitHubReleaseResolverWithBaseURL(&http.Client{}, server.URL)
+	got, err := r.Resolve(context.Background(), "owner/repo", parser.ParsePattern("#.#.#"))
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if got != "1.0.0" {
+		t.Errorf("Resolve() = %q, want 1.0.0 (a project that only tags, never releases)", got)
+	}
+}
+
 func TestGitHubReleaseResolver_InvalidRepo(t *testing.T) {
 	r := NewGitHubReleaseResolver(&http.Client{})
 	if _, err := r.Resolve(context.Background(), "notaslashrepo", parser.ParsePattern("#.#.#")); err == nil {
