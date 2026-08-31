@@ -45,6 +45,10 @@ func newUpdateCommand() *cli.Command {
 				Usage: "number of parallel workers",
 				Value: 4,
 			},
+			&cli.StringFlag{
+				Name:  "output",
+				Usage: "write a .doneram.pkl config's JSON summary to this path",
+			},
 		},
 		Action: runUpdate,
 	}
@@ -57,6 +61,12 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 	skipHealthcheck := cmd.Bool("skip-healthcheck")
 	format := cmd.String("format")
 	workers := cmd.Int("workers")
+
+	if len(patterns) == 0 {
+		if path, ok := findDoneramConfig(); ok {
+			return runCheckPkl(ctx, path, true, cmd.String("output"))
+		}
+	}
 
 	// Expand file patterns
 	files, err := expandFiles(patterns)

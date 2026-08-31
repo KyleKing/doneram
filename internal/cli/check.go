@@ -37,6 +37,14 @@ func newCheckCommand() *cli.Command {
 				Usage: "number of parallel workers",
 				Value: 4,
 			},
+			&cli.BoolFlag{
+				Name:  "apply",
+				Usage: "patch a .doneram.pkl config's sites in place instead of only reporting drift",
+			},
+			&cli.StringFlag{
+				Name:  "output",
+				Usage: "write a .doneram.pkl config's JSON summary to this path",
+			},
 		},
 		Action: runCheck,
 	}
@@ -50,7 +58,7 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 
 	if len(patterns) == 0 {
 		if path, ok := findDoneramConfig(); ok {
-			return runCheckPkl(ctx, path)
+			return runCheckPkl(ctx, path, cmd.Bool("apply"), cmd.String("output"))
 		}
 	}
 
