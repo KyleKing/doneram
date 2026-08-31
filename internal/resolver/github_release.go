@@ -11,6 +11,7 @@ import (
 
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/pkg/version"
 )
 
 // GitHubReleaseResolver resolves the latest stable release of an
@@ -75,18 +76,29 @@ func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo 
 		return githubRelease{}, fmt.Errorf("fetching releases for %s: %w", repo, err)
 	}
 
+	var best githubRelease
+	var bestTag string
+	found := false
 	for _, release := range releases {
 		tag := strings.TrimPrefix(release.TagName, "v")
 		if release.Prerelease || release.Draft || prereleaseTagPattern.MatchString(tag) {
 			continue
 		}
-		if pattern.Matches(tag) {
-			logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", tag)
-			return release, nil
+		if !pattern.Matches(tag) {
+			continue
+		}
+		// GitHub lists releases by creation date, not version order, so a
+		// backported release of an old tag can sort above a newer one.
+		if !found || version.Compare(version.Parse(tag), version.Parse(bestTag)) > 0 {
+			best, bestTag, found = release, tag, true
 		}
 	}
 
-	return githubRelease{}, fmt.Errorf("no matching stable release found for %s with pattern %v", repo, pattern)
+	if !found {
+		return githubRelease{}, fmt.Errorf("no matching stable release found for %s with pattern %v", repo, pattern)
+	}
+	logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", bestTag)
+	return best, nil
 }
 
 func (r *GitHubReleaseResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {
