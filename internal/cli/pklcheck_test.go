@@ -5,6 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kyleking/doneram/internal/engine"
+	"github.com/kyleking/doneram/internal/locator"
+	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/vulncheck"
 )
 
 const doneramPklFixture = `
@@ -110,5 +115,54 @@ func TestRunCheckPklFailsOnMatchCountMismatch(t *testing.T) {
 
 	if err := runApp(t, "check"); err == nil {
 		t.Error("check should fail when a site's match count disagrees with expect")
+	}
+}
+
+func TestSummarizeSite_Vulnerabilities(t *testing.T) {
+	held := parser.ParsePattern("#.#.#")
+	held.Ceiling = "2.30.0"
+	held.HoldReason = "breaking changes"
+
+	result := engine.SiteResult{
+		Site: engine.Site{
+			Tool:       "requests",
+			Locator:    locator.Locator{Resolver: "pypi"},
+			Constraint: held,
+		},
+		Matches: []locator.Match{{Value: "2.19.0"}},
+		Latest:  "2.30.0",
+	}
+	vuln := vulncheck.Result{
+		Findings: []vulncheck.Finding{
+			{Package: "requests", ID: "GHSA-9hjg-9r4m-mvj7", Severity: "MODERATE", URL: "https://osv.dev/vulnerability/GHSA-9hjg-9r4m-mvj7", Fixed: "2.32.4"},
+		},
+		PatchedVersion: "2.32.4",
+		HeldVulnerable: true,
+	}
+
+	summary := summarizeSite(result, vuln)
+
+	if !summary.HeldVulnerable {
+		t.Error("HeldVulnerable = false, want true")
+	}
+	if summary.PatchedVersion != "2.32.4" {
+		t.Errorf("PatchedVersion = %q, want 2.32.4", summary.PatchedVersion)
+	}
+	if len(summary.Vulnerabilities) != 1 || summary.Vulnerabilities[0].ID != "GHSA-9hjg-9r4m-mvj7" {
+		t.Errorf("Vulnerabilities = %+v, want one finding for GHSA-9hjg-9r4m-mvj7", summary.Vulnerabilities)
+	}
+}
+
+func TestSummarizeSite_NoVulnerabilitiesLeavesFieldsEmpty(t *testing.T) {
+	result := engine.SiteResult{
+		Site:    engine.Site{Tool: "jq"},
+		Matches: []locator.Match{{Value: "1.7.1"}},
+		Latest:  "1.7.1",
+	}
+
+	summary := summarizeSite(result, vulncheck.Result{})
+
+	if summary.Vulnerabilities != nil || summary.PatchedVersion != "" || summary.HeldVulnerable {
+		t.Errorf("summary = %+v, want zero-value vulnerability fields for a non-vulnerable site", summary)
 	}
 }

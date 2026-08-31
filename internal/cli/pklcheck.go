@@ -14,7 +14,10 @@ import (
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/locator"
+	"github.com/kyleking/doneram/internal/osv"
 	"github.com/kyleking/doneram/internal/resolver"
+	"github.com/kyleking/doneram/internal/vulncheck"
+	"github.com/kyleking/doneram/internal/vulnscan"
 )
 
 const doneramConfigName = ".doneram.pkl"
@@ -39,13 +42,26 @@ type pklSummary struct {
 }
 
 type pklSiteSummary struct {
-	Tool    string `json:"tool"`
-	Current string `json:"current,omitempty"`
-	Latest  string `json:"latest,omitempty"`
-	Updated bool   `json:"updated"`
-	Held    string `json:"held,omitempty"`
-	Detail  string `json:"detail,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Tool            string           `json:"tool"`
+	Current         string           `json:"current,omitempty"`
+	Latest          string           `json:"latest,omitempty"`
+	Updated         bool             `json:"updated"`
+	Held            string           `json:"held,omitempty"`
+	Detail          string           `json:"detail,omitempty"`
+	Error           string           `json:"error,omitempty"`
+	Vulnerabilities []pklVulnSummary `json:"vulnerabilities,omitempty"`
+	PatchedVersion  string           `json:"patchedVersion,omitempty"`
+	HeldVulnerable  bool             `json:"heldVulnerable,omitempty"`
+}
+
+// pklVulnSummary is one advisory found for a site's pin, whether from OSV
+// or an image layer scan.
+type pklVulnSummary struct {
+	Package  string `json:"package,omitempty"`
+	ID       string `json:"id"`
+	Severity string `json:"severity,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Fixed    string `json:"fixed,omitempty"`
 }
 
 // runCheckPkl loads a repo's .doneram.pkl and reports on every site it
@@ -79,19 +95,24 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 
 	results := engine.RunSites(ctx, sites, lookup)
 
+	osvClient := osv.New(httpClient)
+	scanner, _ := vulnscan.Detect()
+	vulnResults := vulncheck.Check(ctx, results, osvClient, scanner)
+
 	var mismatches int
 	var patchedAny bool
 	summary := pklSummary{Results: make([]pklSiteSummary, 0, len(results))}
 
-	for _, result := range results {
-		reportSiteResult(result)
+	for i, result := range results {
+		vuln := vulnResults[i]
+		reportSiteResult(result, vuln)
 
 		var mismatch *locator.MismatchError
 		if errors.As(result.Err, &mismatch) {
 			mismatches++
 		}
 
-		siteSummary := summarizeSite(result)
+		siteSummary := summarizeSite(result, vuln)
 
 		if apply && result.Err == nil && siteNeedsPatch(result) {
 			count, err := patchSite(result)
@@ -128,7 +149,7 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 	return nil
 }
 
-func reportSiteResult(result engine.SiteResult) {
+func reportSiteResult(result engine.SiteResult, vuln vulncheck.Result) {
 	var mismatch *locator.MismatchError
 	switch {
 	case errors.As(result.Err, &mismatch):
@@ -150,19 +171,56 @@ func reportSiteResult(result engine.SiteResult) {
 	if result.Detail != "" {
 		fmt.Printf("    %s\n", result.Detail)
 	}
+
+	reportVulnerabilities(result, vuln)
 }
 
-func summarizeSite(result engine.SiteResult) pklSiteSummary {
+// reportVulnerabilities prints every advisory found for a site's pin. A
+// held pin whose only fix sits above the ceiling is called out explicitly,
+// since RunSites already refused to propose that fix as Latest.
+func reportVulnerabilities(result engine.SiteResult, vuln vulncheck.Result) {
+	if !vuln.Vulnerable() {
+		return
+	}
+
+	for _, f := range vuln.Findings {
+		fixed := f.Fixed
+		if fixed == "" {
+			fixed = "no known fix"
+		}
+		fmt.Printf("    ! %s [%s]: %s (fixed: %s) %s\n", f.ID, f.Severity, f.Package, fixed, f.URL)
+	}
+
+	switch {
+	case vuln.HeldVulnerable:
+		fmt.Printf("    held, vulnerable, no fix under the ceiling (minimum patched: %s)\n", vuln.PatchedVersion)
+	case vuln.PatchedVersion != "":
+		fmt.Printf("    candidates: minimum patched %s, latest matching pattern %s\n", vuln.PatchedVersion, result.Latest)
+	}
+}
+
+func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSummary {
 	s := pklSiteSummary{
-		Tool:   result.Site.Tool,
-		Latest: result.Latest,
-		Detail: result.Detail,
+		Tool:           result.Site.Tool,
+		Latest:         result.Latest,
+		Detail:         result.Detail,
+		PatchedVersion: vuln.PatchedVersion,
+		HeldVulnerable: vuln.HeldVulnerable,
 	}
 	if len(result.Matches) > 0 {
 		s.Current = result.Matches[0].Value
 	}
 	if result.Err != nil {
 		s.Error = result.Err.Error()
+	}
+	for _, f := range vuln.Findings {
+		s.Vulnerabilities = append(s.Vulnerabilities, pklVulnSummary{
+			Package:  f.Package,
+			ID:       f.ID,
+			Severity: f.Severity,
+			URL:      f.URL,
+			Fixed:    f.Fixed,
+		})
 	}
 	if hold := result.Site.Constraint; hold != nil && hold.HoldReason != "" {
 		s.Held = hold.HoldReason
