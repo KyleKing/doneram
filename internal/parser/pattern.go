@@ -3,6 +3,8 @@ package parser
 import (
 	"regexp"
 	"strings"
+
+	"github.com/kyleking/doneram/pkg/version"
 )
 
 type VersionPattern struct {
@@ -11,6 +13,12 @@ type VersionPattern struct {
 	Patch  string
 	Suffix string
 	Raw    string
+
+	// Ceiling is a hold's exclusive upper bound (e.g. "3.0.0"), never
+	// crossed regardless of what the base pattern would otherwise match.
+	Ceiling string
+	// HoldReason is why Ceiling was set, carried through to the report.
+	HoldReason string
 }
 
 func (p *VersionPattern) String() string {
@@ -41,13 +49,13 @@ func ParsePattern(s string) *VersionPattern {
 	return p
 }
 
-func (p *VersionPattern) Matches(version string) bool {
-	suffixIdx := strings.Index(version, "-")
-	versionPart := version
+func (p *VersionPattern) Matches(v string) bool {
+	suffixIdx := strings.Index(v, "-")
+	versionPart := v
 	versionSuffix := ""
 	if suffixIdx != -1 {
-		versionPart = version[:suffixIdx]
-		versionSuffix = version[suffixIdx+1:]
+		versionPart = v[:suffixIdx]
+		versionSuffix = v[suffixIdx+1:]
 	}
 
 	parts := strings.Split(versionPart, ".")
@@ -63,10 +71,18 @@ func (p *VersionPattern) Matches(version string) bool {
 	}
 
 	if p.Suffix == "" {
-		return versionSuffix == ""
+		if versionSuffix != "" {
+			return false
+		}
+	} else if !matchSuffix(p.Suffix, versionSuffix) {
+		return false
 	}
 
-	return matchSuffix(p.Suffix, versionSuffix)
+	if p.Ceiling != "" && version.Compare(version.Parse(v), version.Parse(p.Ceiling)) >= 0 {
+		return false
+	}
+
+	return true
 }
 
 func matchSegment(pattern, value string) bool {

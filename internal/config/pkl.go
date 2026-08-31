@@ -12,6 +12,7 @@ import (
 
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/locator"
+	"github.com/kyleking/doneram/internal/parser"
 )
 
 // Site is one location a tool's version literal appears at.
@@ -27,12 +28,15 @@ type Hold struct {
 	Max    *string `json:"max"`
 }
 
-// Tool is one dependency tracked across one or more sites.
+// Tool is one dependency tracked across one or more sites, or, when Command
+// is set, a single command-resolver site with no file to locate a pin in.
 type Tool struct {
-	Resolver     string `json:"resolver"`
-	ResolverName string `json:"resolverName"`
-	Sites        []Site `json:"sites"`
-	Hold         *Hold  `json:"hold"`
+	Resolver       string `json:"resolver"`
+	ResolverName   string `json:"resolverName"`
+	Sites          []Site `json:"sites"`
+	Hold           *Hold  `json:"hold"`
+	Command        string `json:"command"`
+	CommandPattern string `json:"commandPattern"`
 }
 
 // Config is a repo's .doneram.pkl, evaluated to JSON.
@@ -74,10 +78,24 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 
 	for _, name := range names {
 		tool := c.Tools[name]
+		constraint := tool.constraint()
+
+		if tool.Command != "" {
+			out = append(out, engine.Site{
+				Tool:           name,
+				ResolverName:   tool.ResolverName,
+				Constraint:     constraint,
+				Command:        tool.Command,
+				CommandPattern: tool.CommandPattern,
+			})
+			continue
+		}
+
 		for _, site := range tool.Sites {
 			out = append(out, engine.Site{
 				Tool:         name,
 				ResolverName: tool.ResolverName,
+				Constraint:   constraint,
 				Locator: locator.Locator{
 					Glob:     filepath.Join(baseDir, site.File),
 					Pattern:  site.Pattern,
@@ -89,4 +107,16 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 	}
 
 	return out
+}
+
+// constraint builds the version constraint a hold narrows, or nil when the
+// tool has no hold and should take engine's unconstrained default.
+func (t Tool) constraint() *parser.VersionPattern {
+	if t.Hold == nil || t.Hold.Max == nil {
+		return nil
+	}
+	p := parser.ParsePattern("#.#.#")
+	p.Ceiling = *t.Hold.Max
+	p.HoldReason = t.Hold.Reason
+	return p
 }

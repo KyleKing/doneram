@@ -56,6 +56,10 @@ func ParseDirective(line string, lineNum int) *Directive {
 }
 
 func parsePackageDirective(s string) PackageDirective {
+	if hold, ok := parseHoldPattern(s); ok {
+		return PackageDirective{Pattern: hold}
+	}
+
 	colonIdx := strings.Index(s, ":")
 	if colonIdx == -1 {
 		return PackageDirective{Name: s, Pattern: ParsePattern("#.#.#")}
@@ -68,8 +72,32 @@ func parsePackageDirective(s string) PackageDirective {
 		return PackageDirective{Name: name, Ignore: true}
 	}
 
+	if hold, ok := parseHoldPattern(patternStr); ok {
+		return PackageDirective{Name: name, Pattern: hold}
+	}
+
 	return PackageDirective{
 		Name:    name,
 		Pattern: ParsePattern(patternStr),
 	}
+}
+
+// holdRegex matches `hold[reason; <ceiling]`, e.g.
+// `hold[cgo build breaks on 3.0; <3.0.0]`.
+var holdRegex = regexp.MustCompile(`^hold\[([^;]+);\s*<(.+)\]$`)
+
+// parseHoldPattern recognizes a hold directive and returns an unconstrained
+// pattern narrowed by the hold's ceiling, so it keeps taking updates below
+// the ceiling rather than freezing the pin outright.
+func parseHoldPattern(s string) (*VersionPattern, bool) {
+	matches := holdRegex.FindStringSubmatch(s)
+	if matches == nil {
+		return nil, false
+	}
+
+	p := ParsePattern("#.#.#")
+	p.Raw = s
+	p.HoldReason = strings.TrimSpace(matches[1])
+	p.Ceiling = strings.TrimSpace(matches[2])
+	return p, true
 }

@@ -82,6 +82,48 @@ func TestLoadAndCompileSites(t *testing.T) {
 	}
 }
 
+func TestToolConstraintFromHold(t *testing.T) {
+	max := "3.0.0"
+	tool := Tool{Hold: &Hold{Reason: "cgo breaks on 3.0", Max: &max}}
+
+	constraint := tool.constraint()
+	if constraint == nil {
+		t.Fatal("constraint() = nil, want a ceiling-bounded pattern")
+	}
+	if constraint.Ceiling != "3.0.0" {
+		t.Errorf("Ceiling = %q, want 3.0.0", constraint.Ceiling)
+	}
+	if constraint.HoldReason != "cgo breaks on 3.0" {
+		t.Errorf("HoldReason = %q, want %q", constraint.HoldReason, "cgo breaks on 3.0")
+	}
+
+	if (Tool{}).constraint() != nil {
+		t.Error("constraint() for a tool without a hold should be nil")
+	}
+}
+
+func TestSitesEmitsCommandSite(t *testing.T) {
+	cfg := &Config{
+		Tools: map[string]Tool{
+			"eslint": {
+				Command:        "npm outdated",
+				CommandPattern: `^(?P<name>\S+)\s+(?P<current>\S+)\s+(?P<latest>\S+)$`,
+			},
+		},
+	}
+
+	sites := cfg.Sites("/repo")
+	if len(sites) != 1 {
+		t.Fatalf("Sites = %+v, want 1", sites)
+	}
+	if sites[0].Command != "npm outdated" {
+		t.Errorf("Command = %q, want npm outdated", sites[0].Command)
+	}
+	if sites[0].Locator.Glob != "" {
+		t.Errorf("Locator.Glob = %q, want empty for a command site", sites[0].Locator.Glob)
+	}
+}
+
 func TestLoadInvalidPklReportsError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".doneram.pkl")

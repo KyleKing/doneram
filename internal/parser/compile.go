@@ -56,8 +56,13 @@ func CompileLocators(path string, df *Dockerfile) []CompiledSite {
 			continue
 		}
 
+		tool := pkg.Name
+		if tool == "" {
+			tool = imageName
+		}
+
 		sites = append(sites, CompiledSite{
-			Tool:         pkg.Name,
+			Tool:         tool,
 			ResolverName: imageName,
 			Constraint:   pkg.Pattern,
 			Locator: locator.Locator{

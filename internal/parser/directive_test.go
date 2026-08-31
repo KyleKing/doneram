@@ -318,6 +318,48 @@ func TestParseDirective_EmptyPackages(t *testing.T) {
 	}
 }
 
+func TestParseDirective_Hold(t *testing.T) {
+	line := "# doneram: hold[cgo build breaks on 3.0; <3.0.0]"
+	d := ParseDirective(line, 1)
+
+	if d == nil {
+		t.Fatal("ParseDirective() returned nil")
+	}
+	if len(d.Packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(d.Packages))
+	}
+
+	pkg := d.Packages[0]
+	if pkg.Pattern.HoldReason != "cgo build breaks on 3.0" {
+		t.Errorf("HoldReason = %q, want %q", pkg.Pattern.HoldReason, "cgo build breaks on 3.0")
+	}
+	if pkg.Pattern.Ceiling != "3.0.0" {
+		t.Errorf("Ceiling = %q, want 3.0.0", pkg.Pattern.Ceiling)
+	}
+	if !pkg.Pattern.Matches("2.9.9") {
+		t.Error("expected 2.9.9 to match below the ceiling")
+	}
+	if pkg.Pattern.Matches("3.0.0") {
+		t.Error("expected 3.0.0 to be excluded by the ceiling")
+	}
+}
+
+func TestParseDirective_HoldWithPackageName(t *testing.T) {
+	line := "# doneram: golang:hold[cgo build breaks on 3.0; <3.0.0]"
+	d := ParseDirective(line, 1)
+
+	if d == nil {
+		t.Fatal("ParseDirective() returned nil")
+	}
+	pkg := d.Packages[0]
+	if pkg.Name != "golang" {
+		t.Errorf("Name = %q, want golang", pkg.Name)
+	}
+	if pkg.Pattern.Ceiling != "3.0.0" {
+		t.Errorf("Ceiling = %q, want 3.0.0", pkg.Pattern.Ceiling)
+	}
+}
+
 func TestParseDirective_TrailingComma(t *testing.T) {
 	line := "# doneram: python:3.11.#,"
 	d := ParseDirective(line, 1)

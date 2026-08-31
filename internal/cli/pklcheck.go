@@ -88,4 +88,11 @@ func reportSiteResult(result engine.SiteResult) {
 	default:
 		fmt.Printf("✓ %s: up to date (%s)\n", result.Site.Tool, result.Latest)
 	}
+
+	if hold := result.Site.Constraint; hold != nil && hold.HoldReason != "" {
+		fmt.Printf("    held: %s (ceiling <%s)\n", hold.HoldReason, hold.Ceiling)
+	}
+	if result.Detail != "" {
+		fmt.Printf("    %s\n", result.Detail)
+	}
 }

@@ -16,11 +16,22 @@ import (
 // Site pairs a Locator with what resolving its pin needs: which tool it
 // belongs to, the name to resolve against (defaulting to Tool), and the
 // version constraint (defaulting to "#.#.#", any version).
+//
+// A site with Command set has no file to locate a pin in: both its current
+// and latest values come from parsing that command's own output, so it
+// skips the Locator/Resolver lookup entirely.
 type Site struct {
 	Tool         string
 	Locator      locator.Locator
 	ResolverName string
 	Constraint   *parser.VersionPattern
+
+	Command        string
+	CommandPattern string
+}
+
+func (s Site) isCommand() bool {
+	return s.Command != ""
 }
 
 func (s Site) resolverName() string {
@@ -43,6 +54,9 @@ type SiteResult struct {
 	Matches []locator.Match
 	Latest  string
 	Err     error
+	// Detail is extra report text a resolver.Detailer supplies alongside a
+	// resolved version, e.g. a branch-tracking SHA's drift and age.
+	Detail string
 }
 
 // ResolverLookup returns the resolver for a locator's Resolver kind, or
@@ -57,6 +71,11 @@ func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup) []SiteRe
 
 	for _, s := range sites {
 		result := SiteResult{Site: s}
+
+		if s.isCommand() {
+			results = append(results, runCommandSite(ctx, s))
+			continue
+		}
 
 		matches, err := locator.Find(s.Locator)
 		if err != nil {
@@ -86,6 +105,16 @@ func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup) []SiteRe
 			continue
 		}
 		result.Latest = latest
+
+		if detailer, ok := r.(resolver.Detailer); ok {
+			current := ""
+			if len(matches) > 0 {
+				current = matches[0].Value
+			}
+			if detail, err := detailer.Detail(ctx, s.resolverName(), current, latest); err == nil {
+				result.Detail = detail
+			}
+		}
 
 		results = append(results, result)
 	}
