@@ -5,6 +5,7 @@ package vulncheck
 
 import (
 	"context"
+	"strings"
 
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/osv"
@@ -53,11 +54,12 @@ var imageResolvers = map[string]bool{
 // need engine.Site.Ecosystem set explicitly, since the resolver kind alone
 // doesn't carry the distro release or module path.
 var defaultEcosystems = map[string]string{
-	"pypi":     "PyPI",
-	"npm":      "npm",
-	"cargo":    "crates.io",
-	"rubygems": "RubyGems",
-	"composer": "Packagist",
+	"pypi":          "PyPI",
+	"npm":           "npm",
+	"cargo":         "crates.io",
+	"rubygems":      "RubyGems",
+	"composer":      "Packagist",
+	"github-action": "GitHub Actions",
 }
 
 func ecosystemFor(s engine.Site) (string, bool) {
@@ -66,6 +68,20 @@ func ecosystemFor(s engine.Site) (string, bool) {
 	}
 	eco, ok := defaultEcosystems[s.Locator.Resolver]
 	return eco, ok
+}
+
+// queryVersion is the version OSV should be asked about. A github-action
+// pin is the composite "<sha> # <tag>" the locator patches as one unit, and
+// only the tag has an ordering OSV ranges can be read against.
+func queryVersion(s engine.Site, pinned string) string {
+	if s.Locator.Resolver != "github-action" {
+		return pinned
+	}
+	_, tag, ok := strings.Cut(pinned, "# ")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(tag)
 }
 
 func packageName(s engine.Site) string {
@@ -107,10 +123,14 @@ func checkOSV(ctx context.Context, results []engine.SiteResult, osvClient *osv.C
 		if !ok {
 			continue
 		}
+		pinned := queryVersion(r.Site, r.Matches[0].Value)
+		if pinned == "" {
+			continue
+		}
 		queries = append(queries, osv.Query{
 			Package:   packageName(r.Site),
 			Ecosystem: eco,
-			Version:   r.Matches[0].Value,
+			Version:   pinned,
 		})
 		indexes = append(indexes, i)
 	}

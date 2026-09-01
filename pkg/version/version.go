@@ -18,12 +18,13 @@ func Parse(s string) *Version {
 
 	suffixIdx := strings.Index(s, "-")
 	versionPart := s
+
 	if suffixIdx != -1 {
 		versionPart = s[:suffixIdx]
 		v.Suffix = s[suffixIdx+1:]
 	}
 
-	parts := strings.Split(versionPart, ".")
+	parts := strings.Split(strings.TrimPrefix(versionPart, "v"), ".")
 	if len(parts) >= 1 {
 		v.Major, _ = strconv.Atoi(parts[0])
 	}

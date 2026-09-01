@@ -29,6 +29,35 @@ type Advisory struct {
 	Severity string
 	URL      string
 	Fixed    []string
+	ranges   []interval
+}
+
+// interval is one [introduced, fixed) window an advisory covers. An empty
+// fixed means the advisory has no fix and every version at or above
+// introduced is affected.
+type interval struct{ introduced, fixed string }
+
+// affects reports whether v falls inside any of the advisory's ranges.
+func (a Advisory) affects(v string) bool {
+	pinned := version.Parse(v)
+	for _, r := range a.ranges {
+		if r.introduced != "" && r.introduced != "0" && version.Compare(pinned, version.Parse(r.introduced)) < 0 {
+			continue
+		}
+		if r.fixed != "" && version.Compare(pinned, version.Parse(r.fixed)) >= 0 {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// unversionedEcosystems names ecosystems OSV indexes but cannot order
+// versions in, so a versioned query answers with nothing even when an
+// advisory names a range covering the pin. Those are queried by package
+// alone and the ranges are evaluated here.
+var unversionedEcosystems = map[string]bool{
+	"GitHub Actions": true,
 }
 
 // MinimumFix returns the smallest fixed version across advisories that is
@@ -69,7 +98,7 @@ type batchQueryPackage struct {
 
 type batchQuery struct {
 	Package batchQueryPackage `json:"package"`
-	Version string            `json:"version"`
+	Version string            `json:"version,omitempty"`
 }
 
 type batchRequest struct {
@@ -126,7 +155,11 @@ func (c *Client) Query(ctx context.Context, queries []Query) ([][]Advisory, erro
 			if !ok {
 				continue
 			}
-			out[i] = append(out[i], rec.toAdvisory(q.Ecosystem))
+			advisory := rec.toAdvisory(q.Ecosystem)
+			if unversionedEcosystems[q.Ecosystem] && !advisory.affects(q.Version) {
+				continue
+			}
+			out[i] = append(out[i], advisory)
 		}
 	}
 	return out, nil
@@ -141,6 +174,9 @@ func (c *Client) batchQuery(ctx context.Context, queries []Query) ([][]string, e
 		req.Queries[i] = batchQuery{
 			Package: batchQueryPackage{Name: q.Package, Ecosystem: q.Ecosystem},
 			Version: q.Version,
+		}
+		if unversionedEcosystems[q.Ecosystem] {
+			req.Queries[i].Version = ""
 		}
 	}
 
@@ -236,9 +272,18 @@ func (r vulnRecord) toAdvisory(ecosystem string) Advisory {
 			if rng.Type == "GIT" {
 				continue
 			}
+			open := -1
 			for _, event := range rng.Events {
+				if event.Introduced != "" {
+					a.ranges = append(a.ranges, interval{introduced: event.Introduced})
+					open = len(a.ranges) - 1
+				}
 				if event.Fixed != "" {
 					a.Fixed = append(a.Fixed, event.Fixed)
+					if open >= 0 {
+						a.ranges[open].fixed = event.Fixed
+						open = -1
+					}
 				}
 			}
 		}

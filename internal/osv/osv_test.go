@@ -2,6 +2,7 @@ package osv
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -94,5 +95,49 @@ func TestMinimumFix(t *testing.T) {
 
 	if got := MinimumFix(advisories, "2.0.0"); got != "" {
 		t.Errorf("MinimumFix() with current above every fix = %q, want empty", got)
+	}
+}
+
+// TestClient_QueryGitHubActions covers the ecosystem OSV indexes but cannot
+// order versions in: a versioned querybatch answers with nothing, so the
+// query goes out unversioned and the ranges are read here.
+func TestClient_QueryGitHubActions(t *testing.T) {
+	var sentVersion string
+	server := testutil.NewMockServer(map[string]http.HandlerFunc{
+		"/v1/querybatch": func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Queries []struct {
+					Version string `json:"version"`
+				} `json:"queries"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if len(body.Queries) > 0 {
+				sentVersion = body.Queries[0].Version
+			}
+			testutil.FixtureHandler("api/osv/querybatch-actions.json")(w, r)
+		},
+		"/v1/vulns/GHSA-mcph-m25j-8j63": testutil.FixtureHandler("api/osv/GHSA-mcph-m25j-8j63.json"),
+		"/v1/vulns/GHSA-mrrh-fwg8-r2c3": testutil.FixtureHandler("api/osv/GHSA-mrrh-fwg8-r2c3.json"),
+	})
+	defer server.Close()
+
+	c := NewWithBaseURL(&http.Client{}, server.URL)
+	query := Query{Package: "tj-actions/changed-files", Ecosystem: "GitHub Actions", Version: "v45.0.0"}
+
+	results, err := c.Query(context.Background(), []Query{query})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if sentVersion != "" {
+		t.Errorf("sent version %q, want the query to go out unversioned", sentVersion)
+	}
+
+	// v45.0.0 sits above the fix for GHSA-mcph (41) and below the fix for
+	// GHSA-mrrh (46.0.1), so exactly one advisory applies.
+	if len(results[0]) != 1 || results[0][0].ID != "GHSA-mrrh-fwg8-r2c3" {
+		t.Fatalf("advisories = %+v, want only GHSA-mrrh-fwg8-r2c3", results[0])
+	}
+	if got := MinimumFix(results[0], "v45.0.0"); got != "46.0.1" {
+		t.Errorf("MinimumFix = %q, want 46.0.1", got)
 	}
 }
