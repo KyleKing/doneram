@@ -1,3 +1,9 @@
+## v0.3.1 (2026-09-01)
+
+### Fix
+
+- write the JSON summary for a config that declares no tools
+
 ## v0.3.0 (2026-09-01)
 
 ### Feat
