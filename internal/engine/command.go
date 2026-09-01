@@ -11,13 +11,13 @@ import (
 	"github.com/kyleking/doneram/internal/locator"
 )
 
-// runCommandSite runs a Site's Command and parses its output with
+// commandSite runs a Site's Command and parses its output with
 // CommandPattern, a regex with "name", "current", and "latest" named
 // groups, picking the line whose name matches the site's tool. An entry
 // that matches with an empty latest group is up to date, which is how tools
 // like `uv tree --outdated` report a current package. Located matches, when
 // the site has a file, override the command's own current value.
-func runCommandSite(ctx context.Context, s Site, matches []locator.Match) SiteResult {
+func (r *siteRunner) commandSite(ctx context.Context, s Site, matches []locator.Match) SiteResult {
 	result := SiteResult{Site: s, Matches: matches}
 
 	re, err := regexp.Compile(s.CommandPattern)
@@ -33,8 +33,9 @@ func runCommandSite(ctx context.Context, s Site, matches []locator.Match) SiteRe
 		return result
 	}
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", s.Command)
-	output, err := cmd.CombinedOutput()
+	output, err := r.commands.do(s.Command, func() ([]byte, error) {
+		return exec.CommandContext(ctx, "sh", "-c", s.Command).CombinedOutput()
+	})
 	if err != nil {
 		result.Err = fmt.Errorf("running command %q: %w\noutput: %s", s.Command, err, output)
 		return result

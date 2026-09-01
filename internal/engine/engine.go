@@ -7,6 +7,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/parser"
@@ -69,65 +70,140 @@ type SiteResult struct {
 // false when that kind is not available yet.
 type ResolverLookup func(kind string) (resolver.Resolver, bool)
 
+// DefaultWorkers bounds how many sites resolve at once. Per-host limiting
+// lives in the HTTP client, so this only caps total in-flight work.
+const DefaultWorkers = 8
+
+// Option configures a RunSites call.
+type Option func(*options)
+
+type options struct {
+	workers int
+}
+
+// WithWorkers overrides how many sites resolve concurrently. A value below
+// one falls back to DefaultWorkers.
+func WithWorkers(n int) Option {
+	return func(o *options) {
+		if n > 0 {
+			o.workers = n
+		}
+	}
+}
+
 // RunSites finds and resolves every site, continuing past a single site's
 // failure so one unavailable resolver or moved pin never hides the rest of
-// the report.
-func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup) []SiteResult {
-	results := make([]SiteResult, 0, len(sites))
-
-	for _, s := range sites {
-		result := SiteResult{Site: s}
-
-		var matches []locator.Match
-		if s.Locator.Glob != "" {
-			found, err := locator.Find(s.Locator)
-			if err != nil {
-				result.Err = err
-				results = append(results, result)
-				continue
-			}
-			result.Matches = found
-
-			if err := locator.CheckExpect(s.Locator, found); err != nil {
-				result.Err = err
-				results = append(results, result)
-				continue
-			}
-			matches = found
-		}
-
-		if s.isCommand() {
-			results = append(results, runCommandSite(ctx, s, matches))
-			continue
-		}
-
-		r, ok := lookup(s.Locator.Resolver)
-		if !ok {
-			result.Err = fmt.Errorf("resolver %q not available", s.Locator.Resolver)
-			results = append(results, result)
-			continue
-		}
-
-		latest, err := r.Resolve(ctx, s.resolverName(), s.constraint())
-		if err != nil {
-			result.Err = err
-			results = append(results, result)
-			continue
-		}
-		result.Latest = latest
-
-		if detailer, ok := r.(resolver.Detailer); ok {
-			current := ""
-			if len(matches) > 0 {
-				current = matches[0].Value
-			}
-			if detail, err := detailer.Detail(ctx, s.resolverName(), current, latest); err == nil {
-				result.Detail = detail
-			}
-		}
-
-		results = append(results, result)
+// the report. Sites resolve concurrently and results keep their input
+// order; two sites asking the same resolver the same question share one
+// answer.
+func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup, opts ...Option) []SiteResult {
+	cfg := options{workers: DefaultWorkers}
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
+	run := &siteRunner{
+		lookup:   lookup,
+		resolved: newMemo[resolveKey, string](),
+		detailed: newMemo[detailKey, string](),
+		commands: newMemo[string, []byte](),
+	}
+
+	results := make([]SiteResult, len(sites))
+	sem := make(chan struct{}, cfg.workers)
+	var wg sync.WaitGroup
+
+	for i, s := range sites {
+		wg.Add(1)
+		go func(i int, s Site) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			results[i] = run.site(ctx, s)
+		}(i, s)
+	}
+
+	wg.Wait()
 	return results
+}
+
+type resolveKey struct {
+	kind       string
+	name       string
+	constraint string
+}
+
+type detailKey struct {
+	resolveKey
+	current string
+	latest  string
+}
+
+type siteRunner struct {
+	lookup   ResolverLookup
+	resolved *memo[resolveKey, string]
+	detailed *memo[detailKey, string]
+	commands *memo[string, []byte]
+}
+
+func (r *siteRunner) site(ctx context.Context, s Site) SiteResult {
+	result := SiteResult{Site: s}
+
+	var matches []locator.Match
+	if s.Locator.Glob != "" {
+		found, err := locator.Find(s.Locator)
+		if err != nil {
+			result.Err = err
+			return result
+		}
+		result.Matches = found
+
+		if err := locator.CheckExpect(s.Locator, found); err != nil {
+			result.Err = err
+			return result
+		}
+		matches = found
+	}
+
+	if s.isCommand() {
+		return r.commandSite(ctx, s, matches)
+	}
+
+	res, ok := r.lookup(s.Locator.Resolver)
+	if !ok {
+		result.Err = fmt.Errorf("resolver %q not available", s.Locator.Resolver)
+		return result
+	}
+
+	key := resolveKey{
+		kind:       s.Locator.Resolver,
+		name:       s.resolverName(),
+		constraint: s.constraint().String(),
+	}
+	latest, err := r.resolved.do(key, func() (string, error) {
+		return res.Resolve(ctx, s.resolverName(), s.constraint())
+	})
+	if err != nil {
+		result.Err = err
+		return result
+	}
+	result.Latest = latest
+
+	detailer, ok := res.(resolver.Detailer)
+	if !ok {
+		return result
+	}
+
+	current := ""
+	if len(matches) > 0 {
+		current = matches[0].Value
+	}
+	detail, err := r.detailed.do(detailKey{key, current, latest}, func() (string, error) {
+		return detailer.Detail(ctx, s.resolverName(), current, latest)
+	})
+	if err == nil {
+		result.Detail = detail
+	}
+
+	return result
 }

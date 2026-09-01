@@ -34,8 +34,8 @@ func newCheckCommand() *cli.Command {
 			},
 			&cli.IntFlag{
 				Name:  "workers",
-				Usage: "number of parallel workers",
-				Value: 4,
+				Usage: "number of sites or files resolved in parallel",
+				Value: 8,
 			},
 			&cli.BoolFlag{
 				Name:  "apply",
@@ -58,7 +58,7 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 
 	if len(patterns) == 0 {
 		if path, ok := findDoneramConfig(); ok {
-			return runCheckPkl(ctx, path, cmd.Bool("apply"), cmd.String("output"))
+			return runCheckPkl(ctx, pklRun{path: path, apply: cmd.Bool("apply"), output: cmd.String("output"), workers: int(cmd.Int("workers"))})
 		}
 	}
 

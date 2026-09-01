@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/kyleking/doneram/internal/locator"
@@ -210,5 +211,45 @@ func TestRunSitesReportsMismatchWithoutCallingResolver(t *testing.T) {
 	}
 	if results[0].Latest != "" {
 		t.Errorf("Latest = %q, resolver should not run on a mismatch", results[0].Latest)
+	}
+}
+
+type countingResolver struct {
+	fakeResolver
+	mu    sync.Mutex
+	calls int
+}
+
+func (c *countingResolver) Resolve(ctx context.Context, name string, p *parser.VersionPattern) (string, error) {
+	c.mu.Lock()
+	c.calls++
+	c.mu.Unlock()
+	return c.fakeResolver.Resolve(ctx, name, p)
+}
+
+func TestRunSitesResolvesEachQuestionOnce(t *testing.T) {
+	dir := t.TempDir()
+	var sites []Site
+	for _, name := range []string{"a.toml", "b.toml", "c.toml"} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("jq = \"1.7.1\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sites = append(sites, Site{
+			Tool:    "jq",
+			Locator: locator.Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise"},
+		})
+	}
+
+	r := &countingResolver{fakeResolver: fakeResolver{version: "1.8.2"}}
+	results := RunSites(context.Background(), sites, lookupWith("mise", r))
+
+	if r.calls != 1 {
+		t.Errorf("resolved %d times, want 1", r.calls)
+	}
+	for i, got := range results {
+		if got.Latest != "1.8.2" {
+			t.Errorf("site %d latest = %q, want 1.8.2", i, got.Latest)
+		}
 	}
 }

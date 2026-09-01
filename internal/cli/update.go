@@ -42,8 +42,8 @@ func newUpdateCommand() *cli.Command {
 			},
 			&cli.IntFlag{
 				Name:  "workers",
-				Usage: "number of parallel workers",
-				Value: 4,
+				Usage: "number of sites or files resolved in parallel",
+				Value: 8,
 			},
 			&cli.StringFlag{
 				Name:  "output",
@@ -64,7 +64,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 
 	if len(patterns) == 0 {
 		if path, ok := findDoneramConfig(); ok {
-			return runCheckPkl(ctx, path, true, cmd.String("output"))
+			return runCheckPkl(ctx, pklRun{path: path, apply: true, output: cmd.String("output"), workers: int(cmd.Int("workers"))})
 		}
 	}
 

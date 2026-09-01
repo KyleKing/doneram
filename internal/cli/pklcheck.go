@@ -70,7 +70,19 @@ type pklVulnSummary struct {
 // Dockerfile directive compiles into. With apply set, a site whose latest
 // version disagrees with what's on disk is patched in place and afterPatch
 // runs once if anything changed.
-func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string) error {
+// pklRun is one invocation of the config path: which config, whether to
+// patch, where the summary goes, and how much of it to run.
+type pklRun struct {
+	path    string
+	apply   bool
+	output  string
+	workers int
+}
+
+func runCheckPkl(ctx context.Context, run pklRun) error {
+	path := run.path
+	apply := run.apply
+	outputPath := run.output
 	cfg, err := config.Load(path)
 	if err != nil {
 		return fmt.Errorf("loading %s: %w", path, err)
@@ -96,7 +108,7 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 		return r, ok
 	}
 
-	results := engine.RunSites(ctx, sites, lookup)
+	results := engine.RunSites(ctx, sites, lookup, engine.WithWorkers(run.workers))
 
 	osvClient := osv.New(httpClient)
 	scanner, _ := vulnscan.Detect()
