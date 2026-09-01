@@ -153,9 +153,24 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	var patchedAny bool
 	summary := pklSummary{Results: make([]pklSiteSummary, 0, len(results))}
 
+	headlines := make([]string, len(results))
+	for i, result := range results {
+		headlines[i] = siteHeadline(result)
+	}
+
 	for i, result := range results {
 		vuln := vulnResults[i]
-		reportSiteResult(out, result, vuln)
+		repeats := 0
+		if i > 0 && headlines[i-1] == headlines[i] {
+			repeats = -1
+		} else {
+			for j := i + 1; j < len(results) && headlines[j] == headlines[i]; j++ {
+				repeats++
+			}
+		}
+		if repeats >= 0 {
+			reportSiteResult(out, result, vuln, repeats)
+		}
 
 		var mismatch *locator.MismatchError
 		switch {
@@ -269,20 +284,36 @@ func (r pklRun) emit(summary pklSummary, outputPath string) error {
 	return enc.Encode(summary)
 }
 
-func reportSiteResult(out report, result engine.SiteResult, vuln vulncheck.Result) {
+// siteHeadline is the one-line verdict for a site. Sites of the same tool
+// that reach the same verdict produce the same headline, which is what lets
+// the report collapse them.
+func siteHeadline(result engine.SiteResult) string {
 	var mismatch *locator.MismatchError
 	switch {
 	case errors.As(result.Err, &mismatch):
-		out.printf("✗ %s (%s): %v\n", result.Site.Tool, result.Site.Locator.Glob, mismatch)
+		return fmt.Sprintf("✗ %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, mismatch)
+	case result.Err != nil:
+		return fmt.Sprintf("? %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, result.Err)
+	case len(result.Matches) > 0 && result.Latest != result.Matches[0].Value:
+		return fmt.Sprintf("→ %s: %s -> %s", result.Site.Tool, result.Matches[0].Value, result.Latest)
+	default:
+		return fmt.Sprintf("✓ %s: up to date (%s)", result.Site.Tool, result.Latest)
+	}
+}
+
+func reportSiteResult(out report, result engine.SiteResult, vuln vulncheck.Result, repeats int) {
+	headline := siteHeadline(result)
+	if repeats > 0 {
+		out.printf("%s (%d more sites)\n", headline, repeats)
+	} else {
+		out.printf("%s\n", headline)
+	}
+
+	var mismatch *locator.MismatchError
+	if errors.As(result.Err, &mismatch) {
 		for _, c := range mismatch.Candidates {
 			out.printf("    candidate: %s:%d -> %s\n", c.File, c.Line, c.Value)
 		}
-	case result.Err != nil:
-		out.printf("? %s (%s): %v\n", result.Site.Tool, result.Site.Locator.Glob, result.Err)
-	case len(result.Matches) > 0 && result.Latest != result.Matches[0].Value:
-		out.printf("→ %s: %s -> %s\n", result.Site.Tool, result.Matches[0].Value, result.Latest)
-	default:
-		out.printf("✓ %s: up to date (%s)\n", result.Site.Tool, result.Latest)
 	}
 
 	if hold := result.Site.Constraint; hold != nil && hold.HoldReason != "" {
