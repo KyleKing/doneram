@@ -78,10 +78,18 @@ move to. A hold adds a ceiling with a reason attached.
 
 **Minimum release age.** A new version must have been public for a set
 period before doneram proposes it, which is the cheap defense against a
-compromised or immediately-yanked release. Default 24 hours, settable to 0
-or extended per tool. A version that fixes a published CVE overrides the
-wait, and the report says plainly that it did, so a rushed security release
-is never taken silently.
+compromised or immediately-yanked release. A version that fixes a published
+CVE overrides the wait, and the report says plainly that it did, so a rushed
+security release is never taken silently.
+
+The ecosystem converged on this while doneram was being built. Dependabot
+now waits three days by default with no configuration, Renovate has
+`minimumReleaseAge`, pnpm 10.16 has `minimumReleaseAge`, and Yarn 4.10 has
+`npmMinimalAgeGate`, and all of them exempt security updates. A review of 21
+reported supply chain incidents found the malicious versions were pulled
+within hours of publication. doneram's default follows Dependabot at three
+days rather than the 24 hours planned here, settable to 0 or extended per
+tool.
 
 **Yanked versions.** doneram checks yank status both ways: never propose a
 yanked version, and flag a currently-pinned version that has since been
@@ -182,6 +190,84 @@ Done when `check_cdnjs_updates.py`, `check_freshness.py`, and
 `scripts/freshness/` are gone from calcipy_template, and a project generated
 from it gets freshness checks from a pinned doneram action.
 
+## M5.5: Fleet correctness and ergonomics
+
+Wave 1 and wave 2 shipped, and running doneram across 13 repos exposed gaps
+no single-repo milestone could surface.
+
+### The schema is copy-pasted, and it has drifted
+
+Every `.doneram.pkl` inlines its own `Site` and `Tool` classes, because
+doneram publishes no pkl package. Three variants exist today: six repos
+declare `expect: Int(this > 0) = 1`, seven declare `expect: Int(this > 0)?`,
+and yak-shears added `pattern: String?` before the others had it. The `= 1`
+default makes the "one or more" match count unreachable in the six repos
+carrying it, so the fix for count drift is not in effect where it was
+written.
+
+Publishing `Config.pkl` as a pkl package and amending it from each repo
+turns a schema change into a version bump. It lands before anything else
+adds a field.
+
+### The `ecosystem` field cannot be set
+
+`engine.Site.Ecosystem` exists and the loader reads it, but no config
+declares it, so M6's OSV lookup only fires where a resolver kind carries a
+default mapping. Of 82 resolver declarations across the fleet, 54 are
+`github-action`, 13 `github-release`, 10 `mise`, and 2 `npm`. Two pins are
+eligible for an advisory query.
+
+### Resolution is serial and repeats itself
+
+45 sites in my_go_template take 10.1s of wall clock at 0.33s of user time,
+so it is all waiting. `RunSites` is a plain `for` loop with no concurrency,
+no memoization, and no cache. Those 45 sites cover 26 distinct tools, so 19
+resolutions ask a question already answered (setup-go four times, hk three).
+The `--workers` flag exists and applies only to the Dockerfile path.
+
+Rate limiting is the other half. The retry transport backs off on a 429 but
+nothing paces requests, and unauthenticated GitHub is 60 requests an hour,
+which is what made the first CI run report 20 unresolved sites and exit 0.
+Concurrency without a limiter turns a slow correct run into a fast
+rate-limited one.
+
+### `GITHUB_OUTPUT` uses a fixed heredoc delimiter
+
+Resolver-supplied text goes into `body<<DONERAM_EOF`. A version string or
+command output containing that line, or a newline inside a title, writes
+arbitrary step outputs. The delimiter should be random per run, and a title
+containing a newline should be rejected.
+
+### Directives only reach Dockerfiles
+
+`# doneram:` parses inside a Dockerfile and attaches only to `FROM` and
+`COPY --from`. It cannot annotate a mise.toml pin, a workflow `uses:` line,
+a shell variable default, or a CDN URL, which covers every pin shape the
+fleet actually has, so all real usage is pkl config. `hold[reason; <ceiling]`
+is reachable only through a directive, which is why yak-shears' htmx ceiling
+is a bare `2.#.#` with a TODO comment rather than a hold carrying its reason.
+
+Either the directive front end generalizes to any comment-bearing line, or
+it stops being a headline feature and pkl becomes the only interface. What
+is not defensible is a syntax documented as general that works on one file
+type nobody pins through.
+
+### Smaller edges
+
+- No `--config`, so checking another repo means `cd`
+- No `--only <tool>`, so iterating on one pattern re-resolves all 45 sites
+- `check --apply` and `update` do the same thing on the config path
+- `--format json` is accepted and ignored for configs
+- The root usage string still reads "Dockerfile version maintainer"
+- One report line per site, so my_go_template prints `setup-go: up to date`
+  four times in a row
+- Every unresolved site and every count mismatch collapses into one exit
+  code, so a workflow cannot tell drift from breakage
+
+Done when the fleet amends a published schema, a full check of
+my_go_template finishes in about a second, and every pin in the fleet is
+eligible for an advisory lookup.
+
 ## M6: Vulnerability awareness
 
 The reason this milestone exists: Dependabot cannot see most of what doneram
@@ -233,14 +319,71 @@ version question, and vulnerability data is read from layers.
 - Severity, advisory ID, and a link travel with every finding, so the report
   is actionable without a second lookup.
 
+### GitHub Actions coverage, resolved
+
+OSV defines a `GitHub Actions` ecosystem whose package name is
+`{owner}/{repo}`, and the advisories are real: `GHSA-mrrh-fwg8-r2c3`, the
+March 2025 tj-actions/changed-files compromise, carries a well-formed
+`introduced: 0` / `fixed: 46.0.1` range. A versioned `querybatch` for
+`tj-actions/changed-files` at `45.0.7` returns nothing, while the same
+package queried without a version returns the advisory. OSV has no version
+comparator registered for that ecosystem, which matches osv-scanner's own
+fix note about avoiding parse errors on unsupported GitHub Actions version
+ranges.
+
+So doneram queries action pins by package alone and evaluates the ranges
+with `pkg/version`, which it already has for constraint filtering. That
+turns 54 of the fleet's 82 pins from ineligible into covered, and it is the
+single largest coverage win available.
+
+The pin itself is a SHA with the version in a trailing comment
+(`c2a8761… # v4.3.0`), so the advisory query reads the version out of the
+comment. A SHA with no comment cannot be checked, which is one more reason
+the comment stays required.
+
+### Feeding GitHub's own graph
+
+A second, complementary channel: the [dependency submission
+API](https://docs.github.com/en/rest/dependency-graph/dependency-submission)
+takes a snapshot of purl-identified dependencies against a commit, and
+submitted dependencies receive Dependabot alerts and security updates for
+any ecosystem the GitHub Advisory Database covers. doneram already knows
+every pin, its resolver, and its version, which is exactly a snapshot.
+
+The appeal is that alerting, deduplication, and dismissal then live in the
+GitHub UI beside every other alert, rather than in a PR body doneram
+renders. The catch is purl coverage: purl-spec defines `github`, `golang`,
+`pypi`, `npm`, `docker`, and `oci`, and defines no GitHub Actions type at
+all. Whether GitHub's graph accepts a non-standard `pkg:githubactions/...`
+is untested and has to be verified against a real repository before this is
+promised.
+
+### SBOM
+
+Two shapes, and doneram should not confuse them.
+
+For a base image, doneram shells out rather than reading layers itself, per
+the mise, uv, and pkl precedent. syft plus grype splits generation from
+scanning, so the SBOM is an artifact other tools can consume; trivy does
+both in one binary and also emits SPDX, CycloneDX, and GitHub's
+dependency-snapshot format directly. Both produce SPDX 2.3 and CycloneDX
+1.6. trivy's snapshot output is the cheapest path to the submission API
+above, and grype's curated database is the quieter one for alerting. The
+scanner is detected, not required, which is what `vulnscan.Detect` already
+does.
+
+For doneram's own pins, an SBOM is a rendering of the config plus resolved
+versions, and needs no scanner at all. Emitting CycloneDX from a
+`.doneram.pkl` gives a repo an inventory of everything Dependabot cannot
+see, which is the same data the submission API wants. Worth doing only if
+something consumes it.
+
 ### Open questions
 
-- GitHub Actions coverage. OSV returned nothing for `actions/checkout` at
-  v1, which may mean the ecosystem name is wrong or that action pins need
-  the GitHub Advisory Database directly.
-- Terraform and Pulumi have no OSV ecosystem at all.
-- Whether to cache advisory results, given a scheduled weekly run against a
-  batch endpoint is already cheap.
+- Terraform and Pulumi have no OSV ecosystem at all
+- Whether GitHub's dependency graph accepts an action pin as a purl
+- Whether to cache advisory results, given a weekly run against a batch
+  endpoint is already cheap
 
 Done when a Dockerfile pin with a known CVE in its base image reports the
 advisory, its severity, and both candidate versions, and a held pin with no
@@ -250,6 +393,13 @@ fix under its ceiling is visible as such.
 
 - Native PR creation. The JSON contract plus an action works. Revisit when
   the workflow boilerplate is visibly repeated across repos.
+- A fleet view. 13 repos each run their own workflow and open their own PR,
+  with no way to ask what is stale everywhere without 13 checkouts. Mostly
+  falls out of `--config` plus a report mode.
+- Release notes in the PR body. doneram knows the resolver and both
+  versions, so a compare link or a release-page link costs nothing and is
+  what a reviewer actually wants.
+- An SBOM of a repo's own pins, if anything consumes it.
 - Hold ceiling syntax past exclusive `<`. Whether `<=`, ranges, or several
   clauses are worth supporting is undecided.
 - Which files doneram writes for uv. Raising a `pyproject.toml` constraint
