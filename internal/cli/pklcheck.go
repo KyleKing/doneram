@@ -58,6 +58,7 @@ type pklSiteSummary struct {
 	needsUpdate     bool
 	Held            string           `json:"held,omitempty"`
 	Detail          string           `json:"detail,omitempty"`
+	Compare         string           `json:"compare,omitempty"`
 	Error           string           `json:"error,omitempty"`
 	Vulnerabilities []pklVulnSummary `json:"vulnerabilities,omitempty"`
 	PatchedVersion  string           `json:"patchedVersion,omitempty"`
@@ -329,6 +330,7 @@ func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSumma
 	if len(result.Matches) > 0 {
 		s.Current = result.Matches[0].Value
 	}
+	s.Compare = compareLink(result.Site, s.Current, s.Latest)
 	if result.Err != nil {
 		s.Error = result.Err.Error()
 	}
@@ -415,10 +417,14 @@ func finishSummary(summary *pklSummary) {
 
 	var body strings.Builder
 	body.WriteString("Automated pin updates from doneram.\n\n")
-	body.WriteString("| Tool | Current | Latest |\n")
-	body.WriteString("| --- | --- | --- |\n")
+	body.WriteString("| Tool | Current | Latest | Changes |\n")
+	body.WriteString("| --- | --- | --- | --- |\n")
 	for _, s := range updated {
-		fmt.Fprintf(&body, "| `%s` | `%s` | `%s` |\n", s.Tool, s.Current, s.Latest)
+		changes := ""
+		if s.Compare != "" {
+			changes = fmt.Sprintf("[compare](%s)", s.Compare)
+		}
+		fmt.Fprintf(&body, "| `%s` | `%s` | `%s` | %s |\n", s.Tool, s.Current, s.Latest, changes)
 	}
 	summary.Body = body.String()
 }
