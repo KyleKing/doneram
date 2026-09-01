@@ -179,6 +179,10 @@ doneram update --skip-build
 `--fail-on-drift` makes it an exit code too, for a CI job that should go red
 rather than open a pull request.
 
+Drift is the only soft outcome. A site that fails to resolve, matches a
+different number of times than `expect`, or fails to patch exits non-zero,
+because a pin nobody checked looks exactly like a pin that is current.
+
 ## Update policy
 
 Three controls decide whether a newer version is offered, each settable per

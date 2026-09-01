@@ -14,7 +14,7 @@ import (
 
 const doneramPklFixture = `
 class Site { file: String; pattern: String; expect: Int(this > 0) = 1 }
-class Tool { resolver: String = "mise"; resolverName: String?; sites: Listing<Site> }
+class Tool { resolver: String = "nonexistent"; resolverName: String?; sites: Listing<Site> }
 
 tools: Mapping<String, Tool> = new {
   ["jq"] = new {
@@ -23,7 +23,7 @@ tools: Mapping<String, Tool> = new {
 }
 `
 
-func TestRunCheckPklReportsUnavailableResolverWithoutCrashing(t *testing.T) {
+func TestRunCheckPklFailsOnUnresolvedSite(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
@@ -34,8 +34,12 @@ func TestRunCheckPklReportsUnavailableResolverWithoutCrashing(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if err := runApp(t, "check"); err != nil {
-		t.Fatalf("check: %v", err)
+	err := runApp(t, "check")
+	if err == nil {
+		t.Fatal("check: want an error when a site cannot resolve")
+	}
+	if !strings.Contains(err.Error(), "1 unresolved") {
+		t.Fatalf("check: got %v, want an unresolved-site count", err)
 	}
 }
 

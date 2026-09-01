@@ -100,7 +100,7 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 	scanner, _ := vulnscan.Detect()
 	vulnResults := vulncheck.Check(ctx, results, osvClient, scanner)
 
-	var mismatches int
+	var mismatches, unresolved, patchFailures int
 	var patchedAny bool
 	summary := pklSummary{Results: make([]pklSiteSummary, 0, len(results))}
 
@@ -109,8 +109,11 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 		reportSiteResult(result, vuln)
 
 		var mismatch *locator.MismatchError
-		if errors.As(result.Err, &mismatch) {
+		switch {
+		case errors.As(result.Err, &mismatch):
 			mismatches++
+		case result.Err != nil:
+			unresolved++
 		}
 
 		siteSummary := summarizeSite(result, vuln)
@@ -121,6 +124,7 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 			if err != nil {
 				fmt.Printf("✗ %s: patch failed: %v\n", result.Site.Tool, err)
 				siteSummary.Error = err.Error()
+				patchFailures++
 			} else if count > 0 {
 				fmt.Printf("  patched %d site(s) for %s\n", count, result.Site.Tool)
 				siteSummary.Updated = true
@@ -144,8 +148,11 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 		return err
 	}
 
-	if mismatches > 0 {
-		return fmt.Errorf("%d site(s) failed match-count validation", mismatches)
+	if failed := mismatches + unresolved + patchFailures; failed > 0 {
+		return fmt.Errorf(
+			"%d of %d site(s) failed: %d match-count, %d unresolved, %d patch",
+			failed, len(results), mismatches, unresolved, patchFailures,
+		)
 	}
 
 	return nil
