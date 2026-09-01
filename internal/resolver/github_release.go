@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/parser"
@@ -45,9 +46,10 @@ func (r *GitHubReleaseResolver) Name() string {
 var prereleaseTagPattern = regexp.MustCompile(`(?i)-(alpha|beta|rc|pre)\d*$`)
 
 type githubRelease struct {
-	TagName    string `json:"tag_name"`
-	Prerelease bool   `json:"prerelease"`
-	Draft      bool   `json:"draft"`
+	TagName     string    `json:"tag_name"`
+	Prerelease  bool      `json:"prerelease"`
+	Draft       bool      `json:"draft"`
+	PublishedAt time.Time `json:"published_at"`
 }
 
 func (r *GitHubReleaseResolver) Resolve(ctx context.Context, repo string, pattern *parser.VersionPattern) (string, error) {
@@ -76,7 +78,12 @@ func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo 
 		return githubRelease{}, fmt.Errorf("fetching releases for %s: %w", repo, err)
 	}
 
-	if best, bestTag, ok := bestRelease(releases, pattern); ok {
+	cutoff := cooldownCutoff(ctx)
+	if held, ok := heldByCooldown(releases, pattern, cutoff); ok {
+		logger.Info("release held by cooldown", "resolver", "github-release", "repo", repo, "version", held.TagName, "published", held.PublishedAt)
+	}
+
+	if best, bestTag, ok := bestRelease(releases, pattern, cutoff); ok {
 		logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", bestTag)
 		return best, nil
 	}
@@ -95,7 +102,9 @@ func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo 
 	for i, t := range tags {
 		asReleases[i] = githubRelease{TagName: t.Name}
 	}
-	if best, bestTag, ok := bestRelease(asReleases, pattern); ok {
+	// A tag carries no publication time, so the cooldown cannot apply to
+	// a project that never cuts releases.
+	if best, bestTag, ok := bestRelease(asReleases, pattern, time.Time{}); ok {
 		logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", bestTag, "source", "tags")
 		return best, nil
 	}
@@ -104,10 +113,10 @@ func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo 
 }
 
 // bestRelease returns the highest version among releases matching pattern,
-// skipping prereleases and drafts. GitHub lists releases by creation date,
-// not version order, so a backported release of an old tag can sort above
-// a newer one.
-func bestRelease(releases []githubRelease, pattern *parser.VersionPattern) (githubRelease, string, bool) {
+// skipping prereleases, drafts, and anything published after cutoff. GitHub
+// lists releases by creation date, not version order, so a backported
+// release of an old tag can sort above a newer one.
+func bestRelease(releases []githubRelease, pattern *parser.VersionPattern, cutoff time.Time) (githubRelease, string, bool) {
 	var best githubRelease
 	var bestTag string
 	found := false
@@ -119,11 +128,35 @@ func bestRelease(releases []githubRelease, pattern *parser.VersionPattern) (gith
 		if !pattern.Matches(tag) {
 			continue
 		}
+		if tooNew(release, cutoff) {
+			continue
+		}
 		if !found || version.Compare(version.Parse(tag), version.Parse(bestTag)) > 0 {
 			best, bestTag, found = release, tag, true
 		}
 	}
 	return best, bestTag, found
+}
+
+func tooNew(release githubRelease, cutoff time.Time) bool {
+	return !cutoff.IsZero() && !release.PublishedAt.IsZero() && release.PublishedAt.After(cutoff)
+}
+
+// heldByCooldown reports the release a run would have offered had the
+// cooldown not applied, so the report can say why the pin stayed put.
+func heldByCooldown(releases []githubRelease, pattern *parser.VersionPattern, cutoff time.Time) (githubRelease, bool) {
+	if cutoff.IsZero() {
+		return githubRelease{}, false
+	}
+	unheld, unheldTag, ok := bestRelease(releases, pattern, time.Time{})
+	if !ok {
+		return githubRelease{}, false
+	}
+	_, heldTag, _ := bestRelease(releases, pattern, cutoff)
+	if unheldTag == heldTag {
+		return githubRelease{}, false
+	}
+	return unheld, true
 }
 
 func (r *GitHubReleaseResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {

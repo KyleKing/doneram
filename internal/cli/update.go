@@ -49,6 +49,11 @@ func newUpdateCommand() *cli.Command {
 				Name:  "fail-on-drift",
 				Usage: "exit non-zero when a pin is out of date, instead of reporting drift and exiting 0",
 			},
+			&cli.DurationFlag{
+				Name:  "min-age",
+				Usage: "hold back a release until it is this old, matching Dependabot's three-day default; 0 disables",
+				Value: resolver.DefaultCooldown,
+			},
 			&cli.StringFlag{
 				Name:  "config",
 				Usage: "path to a .doneram.pkl config, overriding discovery in the working directory",
@@ -73,6 +78,8 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 	skipHealthcheck := cmd.Bool("skip-healthcheck")
 	format := cmd.String("format")
 	workers := cmd.Int("workers")
+
+	ctx = resolver.ContextWithCooldown(ctx, cmd.Duration("min-age"))
 
 	if len(patterns) == 0 {
 		if path, ok := findDoneramConfig(cmd.String("config")); ok {

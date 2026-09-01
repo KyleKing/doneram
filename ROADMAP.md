@@ -88,8 +88,17 @@ now waits three days by default with no configuration, Renovate has
 `npmMinimalAgeGate`, and all of them exempt security updates. A review of 21
 reported supply chain incidents found the malicious versions were pulled
 within hours of publication. doneram's default follows Dependabot at three
-days rather than the 24 hours planned here, settable to 0 or extended per
-tool.
+days rather than the 24 hours planned here.
+
+`--min-age` ships with that 72h default and applies wherever the registry
+publishes a release date, which today is GitHub Releases. A project that
+only cuts tags has no date to read. The security exemption is not
+implemented: a cooldown can currently delay a fix as well as a bad release.
+It does not hide one, because the advisory and the minimum version that
+clears it are reported either way, but a vulnerable pin still has to be
+taken by hand. Wiring the exemption means feeding vulncheck's patched
+version back into the patch decision, which for a github-action pin needs
+the tag resolved back to a SHA before it can be written to a file.
 
 **Yanked versions.** doneram checks yank status both ways: never propose a
 yanked version, and flag a currently-pinned version that has since been

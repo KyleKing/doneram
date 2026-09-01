@@ -178,6 +178,7 @@ doneram check --config path/to/.doneram.pkl
 doneram check --only jq --only hk
 doneram check --format json
 doneram check --fail-on-drift
+doneram check --min-age 0
 
 # Patch in place
 doneram update -f Dockerfile
@@ -206,8 +207,15 @@ further with a ceiling and a reason.
 
 The **minimum release age** keeps doneram from proposing a version that went
 public minutes ago, which is the cheap defense against a compromised or
-immediately-yanked release. The default is 24 hours. Set it to 0 to take
-releases as they land, or raise it where a bad version would be expensive.
+immediately-yanked release. `--min-age` defaults to 72h, following
+Dependabot's own three-day cooldown. Set it to 0 to take releases as they
+land, or raise it where a bad version would be expensive.
+
+The cooldown applies where the registry publishes a release date, which
+today means GitHub Releases. A project that only cuts tags has no date to
+read, so its pins are offered as soon as the tag appears. A cooldown never
+hides an advisory: a vulnerable pin is still reported with the minimum
+version that clears it, even when that version is younger than the window.
 
 **Yanked versions** are checked both ways. doneram never proposes one, and
 reports a currently-pinned version that has since been yanked, because that
