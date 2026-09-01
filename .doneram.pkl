@@ -35,6 +35,7 @@ class Tool {
 
 local ciYml = ".github/workflows/ci.yml"
 local bumpYml = ".github/workflows/bump_version.yml"
+local freshnessYml = ".github/workflows/freshness.yml"
 local miseToml = "mise.toml"
 
 /// A `uses: owner/repo@<sha> # <tag>` GitHub Action pin, one capture group
@@ -53,6 +54,7 @@ tools: Mapping<String, Tool> = new {
     sites = new {
       actionPin("actions/checkout", ciYml, 2)
       actionPin("actions/checkout", bumpYml, 1)
+      actionPin("actions/checkout", freshnessYml, 1)
     }
   }
   ["commitizen-action"] = new {
@@ -64,6 +66,11 @@ tools: Mapping<String, Tool> = new {
         pattern = #"commitizen-tools/commitizen-action@([0-9a-f]{40}) # master"#
       }
     }
+  }
+  ["create-pull-request"] = new {
+    resolver = "github-action"
+    resolverName = "peter-evans/create-pull-request"
+    sites = new { actionPin("peter-evans/create-pull-request", freshnessYml, 1) }
   }
   ["go"] = new {
     resolverName = "go"
@@ -104,6 +111,7 @@ tools: Mapping<String, Tool> = new {
     sites = new {
       actionPin("jdx/mise-action", ciYml, 1)
       actionPin("jdx/mise-action", bumpYml, 1)
+      actionPin("jdx/mise-action", freshnessYml, 1)
     }
   }
   ["pkl"] = new {
@@ -120,6 +128,7 @@ tools: Mapping<String, Tool> = new {
     sites = new {
       actionPin("actions/setup-go", ciYml, 2)
       actionPin("actions/setup-go", bumpYml, 1)
+      actionPin("actions/setup-go", freshnessYml, 1)
     }
   }
   ["upload-artifact"] = new {
