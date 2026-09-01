@@ -17,9 +17,10 @@ import (
 // belongs to, the name to resolve against (defaulting to Tool), and the
 // version constraint (defaulting to "#.#.#", any version).
 //
-// A site with Command set has no file to locate a pin in: both its current
-// and latest values come from parsing that command's own output, so it
-// skips the Locator/Resolver lookup entirely.
+// A site with Command set resolves its latest version by parsing that
+// command's output instead of querying a registry. It may still carry a
+// Locator, in which case the file holds the current value and is what gets
+// patched; without one the command's own output supplies both.
 type Site struct {
 	Tool         string
 	Locator      locator.Locator
@@ -77,22 +78,26 @@ func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup) []SiteRe
 	for _, s := range sites {
 		result := SiteResult{Site: s}
 
+		var matches []locator.Match
+		if s.Locator.Glob != "" {
+			found, err := locator.Find(s.Locator)
+			if err != nil {
+				result.Err = err
+				results = append(results, result)
+				continue
+			}
+			result.Matches = found
+
+			if err := locator.CheckExpect(s.Locator, found); err != nil {
+				result.Err = err
+				results = append(results, result)
+				continue
+			}
+			matches = found
+		}
+
 		if s.isCommand() {
-			results = append(results, runCommandSite(ctx, s))
-			continue
-		}
-
-		matches, err := locator.Find(s.Locator)
-		if err != nil {
-			result.Err = err
-			results = append(results, result)
-			continue
-		}
-		result.Matches = matches
-
-		if err := locator.CheckExpect(s.Locator, matches); err != nil {
-			result.Err = err
-			results = append(results, result)
+			results = append(results, runCommandSite(ctx, s, matches))
 			continue
 		}
 

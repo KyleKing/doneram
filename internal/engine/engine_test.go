@@ -134,6 +134,48 @@ func TestRunSitesCommandSite(t *testing.T) {
 	}
 }
 
+func TestRunSitesCommandSitePatchesItsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pyproject.toml")
+	if err := os.WriteFile(path, []byte("dependencies = [\n  \"uvicorn>=0.52.3\",\n]\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	pattern := `^(?P<name>\S+) v(?P<current>\S+)( \(latest: v(?P<latest>\S+)\))?$`
+	sites := []Site{
+		{
+			Tool:           "uvicorn",
+			Command:        `printf 'uvicorn v0.52.3 (latest: v0.52.4)\n'`,
+			CommandPattern: pattern,
+			Locator:        locator.Locator{Glob: path, Pattern: `uvicorn>=([\d.]+)`},
+		},
+		{
+			Tool:           "anyio",
+			Command:        `printf 'anyio v4.14.2\n'`,
+			CommandPattern: pattern,
+		},
+	}
+
+	results := RunSites(context.Background(), sites, func(string) (resolver.Resolver, bool) { return nil, false })
+
+	if results[0].Err != nil {
+		t.Fatalf("Err = %v", results[0].Err)
+	}
+	if len(results[0].Matches) != 1 || results[0].Matches[0].File != path {
+		t.Errorf("Matches = %+v, want the pyproject occurrence", results[0].Matches)
+	}
+	if results[0].Latest != "0.52.4" {
+		t.Errorf("Latest = %q, want 0.52.4", results[0].Latest)
+	}
+
+	if results[1].Err != nil {
+		t.Fatalf("Err = %v", results[1].Err)
+	}
+	if results[1].Latest != "4.14.2" {
+		t.Errorf("Latest = %q, want a package with no newer version to read as current", results[1].Latest)
+	}
+}
+
 func TestRunSitesCommandSiteNoMatchingEntry(t *testing.T) {
 	site := Site{
 		Tool:           "eslint",

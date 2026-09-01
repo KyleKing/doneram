@@ -113,11 +113,13 @@ tools = new {
 }
 ```
 
-A pattern carries exactly one capture group, around the version. Each site
-declares how many times it expects to match, defaulting to once. A count
-that disagrees fails the run, because a regex that quietly stops matching is
-how a pin goes stale without anyone noticing. On a failed match doneram
-rescans with a loosened pattern and prints ranked candidates.
+A pattern carries exactly one capture group, around the version. A site that
+sets `expect` declares an exact match count, and any other count fails the
+run, because a regex that quietly stops matching is how a pin goes stale
+without anyone noticing. A site that leaves `expect` unset takes one or more
+matches and patches all of them, which is what a file a project generates
+from a template and then extends needs. Either way zero matches fails, and
+doneram rescans with a loosened pattern to print ranked candidates.
 
 A site whose version sits on a different line than the text that identifies
 it, a pre-commit hook's `rev:` under its `repo:` URL, sets `window` to the
@@ -148,10 +150,15 @@ gives the full version list a pattern can filter.
 The rest resolve directly: Docker Hub, GHCR, npm, PyPI, Cargo, Composer,
 RubyGems, apk, apt, yum, GitHub releases, GitHub branch HEAD, and CDNJS.
 
-A command resolver covers what no regex can reach. It runs a command and
-parses name, current, and latest out of its output, which is how a whole
-dependency graph (`uv tree --outdated`, `npm outdated`, `cargo outdated`)
-becomes one more source of drift in the same report.
+A command resolver covers what no registry query can answer. It runs a
+command and parses name, current, and latest out of its output, which is how
+a resolved dependency graph (`uv tree --outdated`, `npm outdated`,
+`cargo outdated`) becomes one more source of drift in the same report. Give
+the tool sites as well and the command answers what the newest version is
+while the sites say where to write it, so a `pyproject.toml` constraint
+moves with what the resolver actually says is installable. An entry the
+command reports without a newer version is up to date, so make the latest
+group optional in the pattern.
 
 ### Pins that track a branch
 
@@ -179,8 +186,8 @@ doneram update --skip-build
 `--fail-on-drift` makes it an exit code too, for a CI job that should go red
 rather than open a pull request.
 
-Drift is the only soft outcome. A site that fails to resolve, matches a
-different number of times than `expect`, or fails to patch exits non-zero,
+Drift is the only soft outcome. A site that fails to resolve, matches the
+wrong number of times, or fails to patch exits non-zero,
 because a pin nobody checked looks exactly like a pin that is current.
 
 ## Update policy
