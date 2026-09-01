@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -9,18 +10,20 @@ import (
 )
 
 type Config struct {
-	MaxRetries int
-	BaseDelay  time.Duration
-	MaxDelay   time.Duration
-	Timeout    time.Duration
+	MaxRetries      int
+	BaseDelay       time.Duration
+	MaxDelay        time.Duration
+	Timeout         time.Duration
+	HostConcurrency int
 }
 
 func DefaultConfig() Config {
 	return Config{
-		MaxRetries: 3,
-		BaseDelay:  1 * time.Second,
-		MaxDelay:   30 * time.Second,
-		Timeout:    30 * time.Second,
+		MaxRetries:      3,
+		BaseDelay:       1 * time.Second,
+		MaxDelay:        30 * time.Second,
+		Timeout:         30 * time.Second,
+		HostConcurrency: DefaultHostConcurrency,
 	}
 }
 
@@ -115,8 +118,11 @@ func (t *retryTransport) calculateDelay(attempt int) time.Duration {
 	return delay
 }
 
+// A spent quota is not retryable: the window outlasts any backoff this run
+// can afford.
 func isRetryable(err error) bool {
-	return true
+	var limit *RateLimitError
+	return !errors.As(err, &limit)
 }
 
 func shouldRetry(statusCode int) bool {
@@ -152,7 +158,7 @@ func New(cfg Config) *http.Client {
 	return &http.Client{
 		Timeout: cfg.Timeout,
 		Transport: &retryTransport{
-			transport:  http.DefaultTransport,
+			transport:  newHostLimiter(http.DefaultTransport, cfg.HostConcurrency),
 			maxRetries: cfg.MaxRetries,
 			baseDelay:  cfg.BaseDelay,
 			maxDelay:   cfg.MaxDelay,
