@@ -258,15 +258,14 @@ type nobody pins through.
 
 ### Smaller edges
 
-- No `--config`, so checking another repo means `cd`
-- No `--only <tool>`, so iterating on one pattern re-resolves all 45 sites
+`--config`, `--only <tool>`, `--fail-on-drift`, a `--format json` the config
+path honors, and an honest root usage string have shipped. What remains:
+
 - `check --apply` and `update` do the same thing on the config path
-- `--format json` is accepted and ignored for configs
-- The root usage string still reads "Dockerfile version maintainer"
 - One report line per site, so my_go_template prints `setup-go: up to date`
   four times in a row
 - Every unresolved site and every count mismatch collapses into one exit
-  code, so a workflow cannot tell drift from breakage
+  code, so a workflow cannot tell one kind of breakage from another
 
 Done when the fleet amends a published schema, a full check of
 my_go_template finishes in about a second, and every pin in the fleet is

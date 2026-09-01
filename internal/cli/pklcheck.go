@@ -89,6 +89,9 @@ type pklRun struct {
 	workers int
 	only    []string
 	format  string
+	// failOnDrift turns an out-of-date pin into a non-zero exit, for a CI
+	// job that goes red rather than opening a pull request.
+	failOnDrift bool
 }
 
 // report is the running commentary. The json format keeps stdout clean for
@@ -200,7 +203,21 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		)
 	}
 
+	if run.failOnDrift && summary.HasUpgrades {
+		return fmt.Errorf("%d pin(s) are out of date", countDrift(summary))
+	}
+
 	return nil
+}
+
+func countDrift(summary pklSummary) int {
+	var n int
+	for _, s := range summary.Results {
+		if s.Updated || s.needsUpdate {
+			n++
+		}
+	}
+	return n
 }
 
 // selectSites keeps only the sites whose tool is named in only, and fails

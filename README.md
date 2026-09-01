@@ -174,6 +174,8 @@ doneram says so, because tracking a tag beats tracking a moving branch.
 doneram check
 
 doneram check -f docker/api/Dockerfile
+doneram check --config path/to/.doneram.pkl
+doneram check --only jq --only hk
 doneram check --format json
 doneram check --fail-on-drift
 
@@ -181,6 +183,10 @@ doneram check --fail-on-drift
 doneram update -f Dockerfile
 doneram update --skip-build
 ```
+
+`--only` narrows a run to named tools and fails on a name the config does
+not declare, so a typo cannot quietly check nothing. `--format json` writes
+the summary to stdout and nothing else, which is what a script should read.
 
 `check` never writes. Drift is reported in the output and the JSON summary.
 `--fail-on-drift` makes it an exit code too, for a CI job that should go red

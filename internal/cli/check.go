@@ -41,6 +41,10 @@ func newCheckCommand() *cli.Command {
 				Name:  "apply",
 				Usage: "patch a .doneram.pkl config's sites in place instead of only reporting drift",
 			},
+			&cli.BoolFlag{
+				Name:  "fail-on-drift",
+				Usage: "exit non-zero when a pin is out of date, instead of reporting drift and exiting 0",
+			},
 			&cli.StringFlag{
 				Name:  "config",
 				Usage: "path to a .doneram.pkl config, overriding discovery in the working directory",
@@ -67,12 +71,13 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 	if len(patterns) == 0 {
 		if path, ok := findDoneramConfig(cmd.String("config")); ok {
 			return runCheckPkl(ctx, pklRun{
-				path:    path,
-				apply:   cmd.Bool("apply"),
-				output:  cmd.String("output"),
-				workers: int(cmd.Int("workers")),
-				only:    cmd.StringSlice("only"),
-				format:  format,
+				path:        path,
+				apply:       cmd.Bool("apply"),
+				output:      cmd.String("output"),
+				workers:     int(cmd.Int("workers")),
+				only:        cmd.StringSlice("only"),
+				format:      format,
+				failOnDrift: cmd.Bool("fail-on-drift"),
 			})
 		}
 		if path := cmd.String("config"); path != "" {
