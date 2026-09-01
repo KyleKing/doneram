@@ -1,3 +1,10 @@
+## v0.3.0 (2026-09-01)
+
+### Feat
+
+- patch a file from a command resolver's latest version
+- take one or more matches when a site declares no count
+
 ## v0.2.3 (2026-09-01)
 
 ### Fix
