@@ -92,7 +92,10 @@ days rather than the 24 hours planned here.
 
 `--min-age` ships with that 72h default and applies wherever the registry
 publishes a release date, which today is GitHub Releases. A project that
-only cuts tags has no date to read. The security exemption is not
+only cuts tags has no date to read, and a repo whose every matching release
+sits inside the window offers nothing rather than falling through to
+`/tags`, which would hand back the release just held. The security
+exemption is not
 implemented: a cooldown can currently delay a fix as well as a bad release.
 It does not hide one, because the advisory and the minimum version that
 clears it are reported either way, but a vulnerable pin still has to be
@@ -163,8 +166,9 @@ CDN marker, hold comment, uv dependency tree).
 - Patching, `--apply`, and the JSON summary contract
 - `afterPatch` command, so patching my_go_template regenerates `.ctt`
 - Scheduled workflow in each repo, opening a standing draft PR
-- wavez's mise pins move off `latest` (11 of 13 tools say `latest` today,
-  because it was generated before my_go_template pinned them)
+- wavez tracks only the pins it owns, since its mise tools, hk.pkl, and ci
+  and bump_version workflows arrive from my_go_template through copier and
+  patching them locally would only make the next update a merge
 
 Done when `scripts/freshness/` and `check_freshness.py` are deleted from
 yak-shears and my_go_template, and a scheduled run has opened a real PR in

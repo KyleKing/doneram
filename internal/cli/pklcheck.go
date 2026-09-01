@@ -298,6 +298,8 @@ func siteHeadline(result engine.SiteResult) string {
 		return fmt.Sprintf("✗ %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, mismatch)
 	case result.Err != nil:
 		return fmt.Sprintf("? %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, result.Err)
+	case result.Latest == "" && len(result.Matches) > 0:
+		return fmt.Sprintf("· %s: held at %s, every newer release is inside --min-age", result.Site.Tool, result.Matches[0].Value)
 	case len(result.Matches) > 0 && result.Latest != result.Matches[0].Value:
 		return fmt.Sprintf("→ %s: %s -> %s", result.Site.Tool, result.Matches[0].Value, result.Latest)
 	default:

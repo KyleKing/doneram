@@ -79,11 +79,17 @@ func (r *GitHubReleaseResolver) latestMatchingRelease(ctx context.Context, repo 
 	}
 
 	cutoff := cooldownCutoff(ctx)
-	if held, ok := heldByCooldown(releases, pattern, cutoff); ok {
+	best, bestTag, ok := bestRelease(releases, pattern, cutoff)
+	if held, isHeld := heldByCooldown(releases, pattern, cutoff); isHeld {
 		logger.Info("release held by cooldown", "resolver", "github-release", "repo", repo, "version", held.TagName, "published", held.PublishedAt)
+		// Nothing older than the window exists, and /tags would hand back
+		// the very release the cooldown is holding.
+		if !ok {
+			return githubRelease{}, nil
+		}
 	}
 
-	if best, bestTag, ok := bestRelease(releases, pattern, cutoff); ok {
+	if ok {
 		logger.Info("resolved repo", "resolver", "github-release", "repo", repo, "version", bestTag)
 		return best, nil
 	}

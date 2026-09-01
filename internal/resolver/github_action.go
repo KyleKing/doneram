@@ -49,6 +49,9 @@ func (r *GitHubActionResolver) Resolve(ctx context.Context, repo string, pattern
 	if err != nil {
 		return "", err
 	}
+	if release.TagName == "" {
+		return "", nil
+	}
 
 	commit, err := getGitHubJSON[githubCommit](ctx, r.client, fmt.Sprintf("%s/repos/%s/%s/commits/%s", r.baseURL, owner, name, release.TagName))
 	if err != nil {
