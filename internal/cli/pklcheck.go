@@ -199,7 +199,11 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		summary.Results = append(summary.Results, siteSummary)
 	}
 
-	out.printf("\nChecked %d site(s) across %d tool(s)\n", len(results), len(cfg.Tools))
+	tools := make(map[string]bool, len(sites))
+	for _, s := range sites {
+		tools[s.Tool] = true
+	}
+	out.printf("\nChecked %d site(s) across %d tool(s)\n", len(results), len(tools))
 
 	if patchedAny && cfg.AfterPatch != "" {
 		if err := runAfterPatch(ctx, out, cfg.AfterPatch, baseDir); err != nil {
