@@ -217,19 +217,23 @@ default mapping. Of 82 resolver declarations across the fleet, 54 are
 `github-action`, 13 `github-release`, 10 `mise`, and 2 `npm`. Two pins are
 eligible for an advisory query.
 
-### Resolution is serial and repeats itself
+### Resolution is serial and repeats itself (done)
 
-45 sites in my_go_template take 10.1s of wall clock at 0.33s of user time,
-so it is all waiting. `RunSites` is a plain `for` loop with no concurrency,
-no memoization, and no cache. Those 45 sites cover 26 distinct tools, so 19
-resolutions ask a question already answered (setup-go four times, hk three).
-The `--workers` flag exists and applies only to the Dockerfile path.
+45 sites in my_go_template took 10.1s of wall clock at 0.33s of user time,
+so it was all waiting. `RunSites` was a plain `for` loop with no
+concurrency and no memoization, and those 45 sites cover 26 distinct tools,
+so 19 resolutions asked a question already answered (setup-go four times,
+hk three). `RunSites` now runs eight sites at a time and routes every
+resolve, detail, and command through a single-flight cache, which takes the
+same run to 2.25s.
 
-Rate limiting is the other half. The retry transport backs off on a 429 but
-nothing paces requests, and unauthenticated GitHub is 60 requests an hour,
-which is what made the first CI run report 20 unresolved sites and exit 0.
-Concurrency without a limiter turns a slow correct run into a fast
-rate-limited one.
+Rate limiting was the other half. The retry transport backed off on a 429
+but nothing paced requests, and unauthenticated GitHub is 60 requests an
+hour, which is what made the first CI run report 20 unresolved sites and
+exit 0. A per-host limiter now caps four requests in flight per host and
+reads `x-ratelimit-remaining`; a host that reports its quota spent fails
+the rest of the run immediately with the reset time, because an hour-long
+window outlasts any backoff a single run can afford.
 
 ### `GITHUB_OUTPUT` uses a fixed heredoc delimiter
 
