@@ -1,3 +1,9 @@
+## v0.2.3 (2026-09-01)
+
+### Fix
+
+- fail the run when a site cannot resolve or patch
+
 ## v0.2.2 (2026-08-31)
 
 ### Fix
