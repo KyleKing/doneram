@@ -84,7 +84,9 @@ func runCheckPkl(ctx context.Context, path string, apply bool, outputPath string
 	sites := cfg.Sites(baseDir)
 	if len(sites) == 0 {
 		fmt.Printf("%s declares no tools\n", path)
-		return nil
+		summary := pklSummary{Results: []pklSiteSummary{}}
+		finishSummary(&summary)
+		return writeSummary(summary, outputPath)
 	}
 
 	httpClient := httpclient.New(httpclient.DefaultConfig())

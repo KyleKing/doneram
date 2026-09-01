@@ -23,6 +23,29 @@ tools: Mapping<String, Tool> = new {
 }
 `
 
+func TestRunCheckPklEmptyConfigStillWritesTheSummary(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	config := "tools: Mapping<String, Any> = new {}\n"
+	if err := os.WriteFile(filepath.Join(dir, ".doneram.pkl"), []byte(config), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	out := filepath.Join(dir, "summary.json")
+
+	if err := runApp(t, "check", "--output", out); err != nil {
+		t.Fatalf("check: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(data), `"has_upgrades": false`) {
+		t.Errorf("summary = %s, want has_upgrades false", data)
+	}
+}
+
 func TestRunCheckPklFailsOnUnresolvedSite(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
