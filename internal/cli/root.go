@@ -13,7 +13,7 @@ import (
 func NewApp(version, commit, date string) *cli.Command {
 	return &cli.Command{
 		Name:    "doneram",
-		Usage:   "Dockerfile version maintainer",
+		Usage:   "Version pin maintainer for Dockerfiles and .doneram.pkl config sites",
 		Version: version,
 		Before:  setupLogging,
 		Flags: []cli.Flag{

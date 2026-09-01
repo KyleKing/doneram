@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/kyleking/doneram/internal/config"
@@ -25,14 +26,19 @@ import (
 
 const doneramConfigName = ".doneram.pkl"
 
-// findDoneramConfig looks for a .doneram.pkl in the current directory,
-// which `check` prefers over the default ./Dockerfile per doneram.md.
-func findDoneramConfig() (string, bool) {
-	info, err := os.Stat(doneramConfigName)
+// findDoneramConfig resolves the config path, preferring an explicit
+// --config over the .doneram.pkl in the current directory, which `check`
+// itself prefers over the default ./Dockerfile per doneram.md.
+func findDoneramConfig(explicit string) (string, bool) {
+	name := doneramConfigName
+	if explicit != "" {
+		name = explicit
+	}
+	info, err := os.Stat(name)
 	if err != nil || info.IsDir() {
 		return "", false
 	}
-	return doneramConfigName, true
+	return name, true
 }
 
 // pklSummary is the JSON summary contract a scheduled workflow reads: enough
@@ -74,18 +80,37 @@ type pklVulnSummary struct {
 // version disagrees with what's on disk is patched in place and afterPatch
 // runs once if anything changed.
 // pklRun is one invocation of the config path: which config, whether to
-// patch, where the summary goes, and how much of it to run.
+// patch, where the summary goes, and how much of it to run. Only names the
+// tools to run, empty meaning all of them.
 type pklRun struct {
 	path    string
 	apply   bool
 	output  string
 	workers int
+	only    []string
+	format  string
+}
+
+// report is the running commentary. The json format keeps stdout clean for
+// the summary, so its writes go nowhere.
+type report struct{ w io.Writer }
+
+func (r report) printf(format string, a ...any) {
+	_, _ = fmt.Fprintf(r.w, format, a...)
+}
+
+func (r pklRun) out() report {
+	if r.format == "json" {
+		return report{io.Discard}
+	}
+	return report{os.Stdout}
 }
 
 func runCheckPkl(ctx context.Context, run pklRun) error {
 	path := run.path
 	apply := run.apply
 	outputPath := run.output
+	out := run.out()
 	cfg, err := config.Load(path)
 	if err != nil {
 		return fmt.Errorf("loading %s: %w", path, err)
@@ -96,12 +121,15 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		return fmt.Errorf("resolving %s: %w", path, err)
 	}
 
-	sites := cfg.Sites(baseDir)
+	sites, err := selectSites(cfg.Sites(baseDir), run.only)
+	if err != nil {
+		return err
+	}
 	if len(sites) == 0 {
-		fmt.Printf("%s declares no tools\n", path)
+		out.printf("%s declares no tools\n", path)
 		summary := pklSummary{Results: []pklSiteSummary{}}
 		finishSummary(&summary)
-		return writeSummary(summary, outputPath)
+		return run.emit(summary, outputPath)
 	}
 
 	httpClient := httpclient.New(httpclient.DefaultConfig())
@@ -123,7 +151,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 
 	for i, result := range results {
 		vuln := vulnResults[i]
-		reportSiteResult(result, vuln)
+		reportSiteResult(out, result, vuln)
 
 		var mismatch *locator.MismatchError
 		switch {
@@ -139,11 +167,11 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		if apply && siteSummary.needsUpdate {
 			count, err := patchSite(result)
 			if err != nil {
-				fmt.Printf("✗ %s: patch failed: %v\n", result.Site.Tool, err)
+				out.printf("✗ %s: patch failed: %v\n", result.Site.Tool, err)
 				siteSummary.Error = err.Error()
 				patchFailures++
 			} else if count > 0 {
-				fmt.Printf("  patched %d site(s) for %s\n", count, result.Site.Tool)
+				out.printf("  patched %d site(s) for %s\n", count, result.Site.Tool)
 				siteSummary.Updated = true
 				patchedAny = true
 			}
@@ -152,16 +180,16 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		summary.Results = append(summary.Results, siteSummary)
 	}
 
-	fmt.Printf("\nChecked %d site(s) across %d tool(s)\n", len(results), len(cfg.Tools))
+	out.printf("\nChecked %d site(s) across %d tool(s)\n", len(results), len(cfg.Tools))
 
 	if patchedAny && cfg.AfterPatch != "" {
-		if err := runAfterPatch(ctx, cfg.AfterPatch, baseDir); err != nil {
+		if err := runAfterPatch(ctx, out, cfg.AfterPatch, baseDir); err != nil {
 			return fmt.Errorf("afterPatch %q: %w", cfg.AfterPatch, err)
 		}
 	}
 
 	finishSummary(&summary)
-	if err := writeSummary(summary, outputPath); err != nil {
+	if err := run.emit(summary, outputPath); err != nil {
 		return err
 	}
 
@@ -175,36 +203,84 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	return nil
 }
 
-func reportSiteResult(result engine.SiteResult, vuln vulncheck.Result) {
+// selectSites keeps only the sites whose tool is named in only, and fails
+// on a name the config does not declare rather than silently checking
+// nothing.
+func selectSites(sites []engine.Site, only []string) ([]engine.Site, error) {
+	if len(only) == 0 {
+		return sites, nil
+	}
+
+	wanted := make(map[string]bool, len(only))
+	for _, tool := range only {
+		wanted[tool] = false
+	}
+
+	var kept []engine.Site
+	for _, s := range sites {
+		if _, ok := wanted[s.Tool]; ok {
+			wanted[s.Tool] = true
+			kept = append(kept, s)
+		}
+	}
+
+	var missing []string
+	for tool, found := range wanted {
+		if !found {
+			missing = append(missing, tool)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return nil, fmt.Errorf("no site declares %s", strings.Join(missing, ", "))
+	}
+	return kept, nil
+}
+
+// emit writes the JSON summary to stdout under the json format, on top of
+// the file and $GITHUB_OUTPUT writes every format performs.
+func (r pklRun) emit(summary pklSummary, outputPath string) error {
+	if err := writeSummary(summary, outputPath); err != nil {
+		return err
+	}
+	if r.format != "json" {
+		return nil
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(summary)
+}
+
+func reportSiteResult(out report, result engine.SiteResult, vuln vulncheck.Result) {
 	var mismatch *locator.MismatchError
 	switch {
 	case errors.As(result.Err, &mismatch):
-		fmt.Printf("✗ %s (%s): %v\n", result.Site.Tool, result.Site.Locator.Glob, mismatch)
+		out.printf("✗ %s (%s): %v\n", result.Site.Tool, result.Site.Locator.Glob, mismatch)
 		for _, c := range mismatch.Candidates {
-			fmt.Printf("    candidate: %s:%d -> %s\n", c.File, c.Line, c.Value)
+			out.printf("    candidate: %s:%d -> %s\n", c.File, c.Line, c.Value)
 		}
 	case result.Err != nil:
-		fmt.Printf("? %s (%s): %v\n", result.Site.Tool, result.Site.Locator.Glob, result.Err)
+		out.printf("? %s (%s): %v\n", result.Site.Tool, result.Site.Locator.Glob, result.Err)
 	case len(result.Matches) > 0 && result.Latest != result.Matches[0].Value:
-		fmt.Printf("→ %s: %s -> %s\n", result.Site.Tool, result.Matches[0].Value, result.Latest)
+		out.printf("→ %s: %s -> %s\n", result.Site.Tool, result.Matches[0].Value, result.Latest)
 	default:
-		fmt.Printf("✓ %s: up to date (%s)\n", result.Site.Tool, result.Latest)
+		out.printf("✓ %s: up to date (%s)\n", result.Site.Tool, result.Latest)
 	}
 
 	if hold := result.Site.Constraint; hold != nil && hold.HoldReason != "" {
-		fmt.Printf("    held: %s (ceiling <%s)\n", hold.HoldReason, hold.Ceiling)
+		out.printf("    held: %s (ceiling <%s)\n", hold.HoldReason, hold.Ceiling)
 	}
 	if result.Detail != "" {
-		fmt.Printf("    %s\n", result.Detail)
+		out.printf("    %s\n", result.Detail)
 	}
 
-	reportVulnerabilities(result, vuln)
+	reportVulnerabilities(out, result, vuln)
 }
 
 // reportVulnerabilities prints every advisory found for a site's pin. A
 // held pin whose only fix sits above the ceiling is called out explicitly,
 // since RunSites already refused to propose that fix as Latest.
-func reportVulnerabilities(result engine.SiteResult, vuln vulncheck.Result) {
+func reportVulnerabilities(out report, result engine.SiteResult, vuln vulncheck.Result) {
 	if !vuln.Vulnerable() {
 		return
 	}
@@ -214,14 +290,14 @@ func reportVulnerabilities(result engine.SiteResult, vuln vulncheck.Result) {
 		if fixed == "" {
 			fixed = "no known fix"
 		}
-		fmt.Printf("    ! %s [%s]: %s (fixed: %s) %s\n", f.ID, f.Severity, f.Package, fixed, f.URL)
+		out.printf("    ! %s [%s]: %s (fixed: %s) %s\n", f.ID, f.Severity, f.Package, fixed, f.URL)
 	}
 
 	switch {
 	case vuln.HeldVulnerable:
-		fmt.Printf("    held, vulnerable, no fix under the ceiling (minimum patched: %s)\n", vuln.PatchedVersion)
+		out.printf("    held, vulnerable, no fix under the ceiling (minimum patched: %s)\n", vuln.PatchedVersion)
 	case vuln.PatchedVersion != "":
-		fmt.Printf("    candidates: minimum patched %s, latest matching pattern %s\n", vuln.PatchedVersion, result.Latest)
+		out.printf("    candidates: minimum patched %s, latest matching pattern %s\n", vuln.PatchedVersion, result.Latest)
 	}
 }
 
@@ -290,15 +366,15 @@ func patchSite(result engine.SiteResult) (int, error) {
 // runAfterPatch runs a repo's afterPatch command from baseDir, the
 // directory holding .doneram.pkl, so a relative script path resolves the
 // way it does when a developer runs it by hand.
-func runAfterPatch(ctx context.Context, command, baseDir string) error {
+func runAfterPatch(ctx context.Context, out report, command, baseDir string) error {
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = baseDir
-	out, err := cmd.CombinedOutput()
-	if len(out) > 0 {
-		fmt.Printf("\nafterPatch (%s):\n%s\n", command, out)
+	res, err := cmd.CombinedOutput()
+	if len(res) > 0 {
+		out.printf("\nafterPatch (%s):\n%s\n", command, res)
 	}
 	if err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(res)))
 	}
 	return nil
 }

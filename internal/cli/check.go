@@ -42,6 +42,14 @@ func newCheckCommand() *cli.Command {
 				Usage: "patch a .doneram.pkl config's sites in place instead of only reporting drift",
 			},
 			&cli.StringFlag{
+				Name:  "config",
+				Usage: "path to a .doneram.pkl config, overriding discovery in the working directory",
+			},
+			&cli.StringSliceFlag{
+				Name:  "only",
+				Usage: "check only these tools from a .doneram.pkl config (repeatable)",
+			},
+			&cli.StringFlag{
 				Name:  "output",
 				Usage: "write a .doneram.pkl config's JSON summary to this path",
 			},
@@ -57,8 +65,18 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 	workers := cmd.Int("workers")
 
 	if len(patterns) == 0 {
-		if path, ok := findDoneramConfig(); ok {
-			return runCheckPkl(ctx, pklRun{path: path, apply: cmd.Bool("apply"), output: cmd.String("output"), workers: int(cmd.Int("workers"))})
+		if path, ok := findDoneramConfig(cmd.String("config")); ok {
+			return runCheckPkl(ctx, pklRun{
+				path:    path,
+				apply:   cmd.Bool("apply"),
+				output:  cmd.String("output"),
+				workers: int(cmd.Int("workers")),
+				only:    cmd.StringSlice("only"),
+				format:  format,
+			})
+		}
+		if path := cmd.String("config"); path != "" {
+			return fmt.Errorf("reading %s: no such config", path)
 		}
 	}
 
