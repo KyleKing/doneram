@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -104,17 +105,39 @@ func TestCheckExpectMismatchIncludesCandidates(t *testing.T) {
 	}
 }
 
-func TestCheckExpectAgreesByDefault(t *testing.T) {
+func TestCheckExpectWithoutACountTakesOneOrMore(t *testing.T) {
 	dir := t.TempDir()
-	path := writeFile(t, dir, "conf.toml", "jq = \"1.7.1\"\n")
+	one := writeFile(t, dir, "one.toml", "jq = \"1.7.1\"\n")
+	two := writeFile(t, dir, "two.toml", "jq = \"1.7.1\"\njq = \"1.7.1\"\n")
+	none := writeFile(t, dir, "none.toml", "yq = \"1.7.1\"\n")
 
-	l := Locator{Glob: path, Pattern: `jq = "([\d.]+)"`}
-	matches, err := Find(l)
+	for _, path := range []string{one, two} {
+		l := Locator{Glob: path, Pattern: `jq = "([\d.]+)"`}
+		matches, err := Find(l)
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if err := CheckExpect(l, matches); err != nil {
+			t.Errorf("CheckExpect(%s): %v", filepath.Base(path), err)
+		}
+	}
+
+	l := Locator{Glob: none, Pattern: `jq = "([\d.]+)"`}
+	err := CheckExpect(l, nil)
+	if err == nil {
+		t.Fatal("CheckExpect should fail when nothing matches")
+	}
+	if !strings.Contains(err.Error(), "want at least 1") {
+		t.Errorf("err = %v, want an at-least-1 message", err)
+	}
+
+	exact := Locator{Glob: two, Pattern: `jq = "([\d.]+)"`, Expect: 1}
+	matches, err := Find(exact)
 	if err != nil {
 		t.Fatalf("Find: %v", err)
 	}
-	if err := CheckExpect(l, matches); err != nil {
-		t.Errorf("CheckExpect: %v", err)
+	if err := CheckExpect(exact, matches); err == nil {
+		t.Error("CheckExpect should fail when a declared count disagrees")
 	}
 }
 

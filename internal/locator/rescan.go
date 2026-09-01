@@ -18,7 +18,11 @@ type MismatchError struct {
 }
 
 func (e *MismatchError) Error() string {
-	return fmt.Sprintf("%s: pattern matched %d time(s), want %d", e.Locator.Glob, e.Got, e.Want)
+	want := fmt.Sprintf("%d", e.Want)
+	if !e.Locator.ExpectsExactly() {
+		want = "at least 1"
+	}
+	return fmt.Sprintf("%s: pattern matched %d time(s), want %s", e.Locator.Glob, e.Got, want)
 }
 
 // Candidate is a version-shaped literal found near the same context during a
@@ -30,11 +34,17 @@ type Candidate struct {
 }
 
 // CheckExpect fails with a *MismatchError, populated by Rescan, when the
-// actual match count disagrees with l.ExpectedCount().
+// actual match count disagrees with what the site declared.
 func CheckExpect(l Locator, matches []Match) error {
-	want := l.ExpectedCount()
-	if len(matches) == want {
+	want := l.Expect
+	switch {
+	case l.ExpectsExactly() && len(matches) == want:
 		return nil
+	case !l.ExpectsExactly() && len(matches) > 0:
+		return nil
+	}
+	if want == 0 {
+		want = 1
 	}
 
 	candidates, err := Rescan(l)

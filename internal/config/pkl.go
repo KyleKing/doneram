@@ -92,7 +92,7 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 		tool := c.Tools[name]
 		constraint := tool.constraint()
 
-		if tool.Command != "" {
+		if tool.Command != "" && len(tool.Sites) == 0 {
 			out = append(out, engine.Site{
 				Tool:           name,
 				ResolverName:   tool.ResolverName,
@@ -106,10 +106,12 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 
 		for _, site := range tool.Sites {
 			out = append(out, engine.Site{
-				Tool:         name,
-				ResolverName: tool.ResolverName,
-				Constraint:   constraint,
-				Ecosystem:    tool.Ecosystem,
+				Tool:           name,
+				ResolverName:   tool.ResolverName,
+				Constraint:     constraint,
+				Command:        tool.Command,
+				CommandPattern: tool.CommandPattern,
+				Ecosystem:      tool.Ecosystem,
 				Locator: locator.Locator{
 					Glob:     filepath.Join(baseDir, site.File),
 					Pattern:  site.Pattern,

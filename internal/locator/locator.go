@@ -17,7 +17,10 @@ type Locator struct {
 	Glob     string // file path or glob this locator applies to
 	Pattern  string // regex with exactly one capture group around the version
 	Resolver string // resolver kind, e.g. "npm", "docker", "mise"
-	Expect   int    // expected match count; zero or negative defaults to 1
+	// Expect is the exact match count the site declares. Zero means "one
+	// or more", for a pin in a file whose owner may legitimately repeat it
+	// (a generated file a project extends).
+	Expect int
 	// Window is how many consecutive lines Pattern is matched against at
 	// once, for a version tied to context on another line (a pre-commit
 	// hook's rev under its repo URL). Zero or negative defaults to 1.
@@ -27,12 +30,10 @@ type Locator struct {
 	Window int
 }
 
-// ExpectedCount returns Expect, defaulting to 1.
-func (l Locator) ExpectedCount() int {
-	if l.Expect <= 0 {
-		return 1
-	}
-	return l.Expect
+// ExpectsExactly reports whether the site declared a specific match count
+// rather than "one or more".
+func (l Locator) ExpectsExactly() bool {
+	return l.Expect > 0
 }
 
 // WindowSize returns Window, defaulting to 1.
