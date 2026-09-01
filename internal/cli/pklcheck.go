@@ -2,9 +2,12 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -352,15 +355,34 @@ func writeSummary(summary pklSummary, outputPath string) error {
 	}
 	defer func() { _ = f.Close() }()
 
+	if strings.ContainsAny(summary.Title, "\r\n") {
+		return fmt.Errorf("summary title contains a newline: %q", summary.Title)
+	}
+
 	if _, err := fmt.Fprintf(f, "has_upgrades=%t\n", summary.HasUpgrades); err != nil {
 		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
 	}
-	if _, err := fmt.Fprintf(f, "title<<DONERAM_EOF\n%s\nDONERAM_EOF\n", summary.Title); err != nil {
-		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
+	if err := writeHeredoc(f, "title", summary.Title); err != nil {
+		return err
 	}
-	if _, err := fmt.Fprintf(f, "body<<DONERAM_EOF\n%s\nDONERAM_EOF\n", summary.Body); err != nil {
-		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
-	}
+	return writeHeredoc(f, "body", summary.Body)
+}
 
+// writeHeredoc emits one $GITHUB_OUTPUT heredoc under a delimiter drawn
+// fresh each call, so resolver-supplied text cannot close the block early
+// and inject step outputs of its own.
+func writeHeredoc(w io.Writer, name, value string) error {
+	var buf [16]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return fmt.Errorf("generating output delimiter: %w", err)
+	}
+	delim := "DONERAM_" + hex.EncodeToString(buf[:])
+
+	if strings.Contains(value, delim) {
+		return fmt.Errorf("%s collides with its output delimiter", name)
+	}
+	if _, err := fmt.Fprintf(w, "%s<<%s\n%s\n%s\n", name, delim, value, delim); err != nil {
+		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
+	}
 	return nil
 }
