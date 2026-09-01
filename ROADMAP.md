@@ -259,11 +259,12 @@ type nobody pins through.
 ### Smaller edges
 
 `--config`, `--only <tool>`, `--fail-on-drift`, a `--format json` the config
-path honors, and an honest root usage string have shipped. What remains:
+path honors, an honest root usage string, and a report that collapses a
+tool's repeated verdicts into one line (26 lines for 45 sites) have shipped.
+Each updated GitHub pin now carries a compare link in the PR body. What
+remains:
 
 - `check --apply` and `update` do the same thing on the config path
-- One report line per site, so my_go_template prints `setup-go: up to date`
-  four times in a row
 - Every unresolved site and every count mismatch collapses into one exit
   code, so a workflow cannot tell one kind of breakage from another
 
@@ -322,7 +323,7 @@ version question, and vulnerability data is read from layers.
 - Severity, advisory ID, and a link travel with every finding, so the report
   is actionable without a second lookup.
 
-### GitHub Actions coverage, resolved
+### GitHub Actions coverage, shipped
 
 OSV defines a `GitHub Actions` ecosystem whose package name is
 `{owner}/{repo}`, and the advisories are real: `GHSA-mrrh-fwg8-r2c3`, the
@@ -335,9 +336,10 @@ fix note about avoiding parse errors on unsupported GitHub Actions version
 ranges.
 
 So doneram queries action pins by package alone and evaluates the ranges
-with `pkg/version`, which it already has for constraint filtering. That
-turns 54 of the fleet's 82 pins from ineligible into covered, and it is the
-single largest coverage win available.
+with `pkg/version`, which it already had for constraint filtering. That
+turns 54 of the fleet's 82 pins from ineligible into covered, the single
+largest coverage win available. `pkg/version` learned to ignore a leading
+`v` in the same change, without which every tag compared as 0.0.0.
 
 The pin itself is a SHA with the version in a trailing comment
 (`c2a8761… # v4.3.0`), so the advisory query reads the version out of the
