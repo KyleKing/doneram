@@ -250,6 +250,11 @@ fix under its ceiling is visible as such.
 
 - Native PR creation. The JSON contract plus an action works. Revisit when
   the workflow boilerplate is visibly repeated across repos.
+- Hold ceiling syntax past exclusive `<`. Whether `<=`, ranges, or several
+  clauses are worth supporting is undecided.
+- Which files doneram writes for uv. Raising a `pyproject.toml` constraint
+  and handing the lock back to uv is agreed; the split between the two is
+  not drawn.
 - pkl-go bindings.
 - Terraform and Pulumi pins, version half and vulnerability half both.
 - Generalizing validation commands beyond Docker build and healthcheck.
