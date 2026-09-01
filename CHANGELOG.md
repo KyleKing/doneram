@@ -1,3 +1,9 @@
+## v0.3.2 (2026-09-01)
+
+### Fix
+
+- guard the PR step on a string so an empty output cannot throw
+
 ## v0.3.1 (2026-09-01)
 
 ### Fix
