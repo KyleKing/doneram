@@ -36,9 +36,9 @@ func (d *detailingResolver) Detail(context.Context, string, string, string) (str
 	return d.detail, nil
 }
 
-func lookupWith(kind string, r resolver.Resolver) ResolverLookup {
+func lookupWith(r resolver.Resolver) ResolverLookup {
 	return func(k string) (resolver.Resolver, bool) {
-		if k == kind {
+		if k == "mise" {
 			return r, true
 		}
 		return nil, false
@@ -57,7 +57,7 @@ func TestRunSitesResolvesLatest(t *testing.T) {
 		Locator: locator.Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise"},
 	}}
 
-	results := RunSites(context.Background(), sites, lookupWith("mise", &fakeResolver{version: "1.7.2"}))
+	results := RunSites(context.Background(), sites, lookupWith(&fakeResolver{version: "1.7.2"}))
 
 	if len(results) != 1 {
 		t.Fatalf("results = %+v, want 1", results)
@@ -105,7 +105,7 @@ func TestRunSitesCollectsDetailFromDetailer(t *testing.T) {
 	}}
 
 	r := &detailingResolver{fakeResolver: fakeResolver{version: "1.7.2"}, detail: "3 commits behind"}
-	results := RunSites(context.Background(), sites, lookupWith("mise", r))
+	results := RunSites(context.Background(), sites, lookupWith(r))
 
 	if results[0].Detail != "3 commits behind" {
 		t.Errorf("Detail = %q, want %q", results[0].Detail, "3 commits behind")
@@ -204,7 +204,7 @@ func TestRunSitesReportsMismatchWithoutCallingResolver(t *testing.T) {
 		Locator: locator.Locator{Glob: path, Pattern: `jq = "([\d.]+)"`, Resolver: "mise", Expect: 1},
 	}}
 
-	results := RunSites(context.Background(), sites, lookupWith("mise", r))
+	results := RunSites(context.Background(), sites, lookupWith(r))
 
 	if results[0].Err == nil {
 		t.Fatal("Err = nil, want a mismatch error")
@@ -242,7 +242,7 @@ func TestRunSitesResolvesEachQuestionOnce(t *testing.T) {
 	}
 
 	r := &countingResolver{fakeResolver: fakeResolver{version: "1.8.2"}}
-	results := RunSites(context.Background(), sites, lookupWith("mise", r))
+	results := RunSites(context.Background(), sites, lookupWith(r))
 
 	if r.calls != 1 {
 		t.Errorf("resolved %d times, want 1", r.calls)
