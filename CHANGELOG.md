@@ -1,3 +1,26 @@
+## v0.4.0 (2026-09-03)
+
+### Feat
+
+- **resolver**: hold back releases younger than --min-age
+- **osv**: cover GitHub Action pins by evaluating advisory ranges locally
+- **cli**: collapse repeated site verdicts into one line per tool
+- **cli**: link a compare diff for each updated GitHub pin
+- **cli**: add --fail-on-drift and document the config-path flags
+- **cli**: add --config and --only, and honor --format json on the config path
+- **httpclient**: pace requests per host and fail fast on a spent quota
+
+### Fix
+
+- **engine**: drop the resolver-kind param lookupWith never varies
+- **resolver**: stop the tags fallback from returning a release the cooldown held
+- **cli**: count only the tools a run actually checked
+- **cli**: draw a fresh GITHUB_OUTPUT heredoc delimiter per run
+
+### Perf
+
+- resolve sites concurrently and answer each question once
+
 ## v0.3.2 (2026-09-01)
 
 ### Fix
