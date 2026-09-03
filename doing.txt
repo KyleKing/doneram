@@ -2,6 +2,10 @@ See freshness/checkers.py in yak-shears and now calcipy-template
 
 This repository *could* be more general (could rename?)
 
+## 2026-09-02 (freshen)
+
+- Freshness workflow red run (2026-09-01, 52797c4) confirmed as the doneram App `workflows` permission gap you're already configuring, not a code bug: create-pull-request fails pushing `chore/doneram-updates` because it touches `.github/workflows/bump_version.yml`
+
 ## 2026-08-01 (freshen)
 
 - every item below is still open; nothing from 2026-07-27 has been addressed
