@@ -1,3 +1,9 @@
+## v0.5.1 (2026-11-11)
+
+### Fix
+
+- **ghcr**: fetch the anonymous pull token and follow tag-list pages
+
 ## v0.5.0 (2026-11-11)
 
 ### Feat
