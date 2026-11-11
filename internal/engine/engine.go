@@ -35,6 +35,9 @@ type Site struct {
 	// "PyPI", "Alpine:v3.19"), overriding the default derived from
 	// Locator.Resolver. Empty skips OSV lookup for the site.
 	Ecosystem string
+
+	// EOL is the endoflife.date product the pin's cycle is looked up in.
+	EOL string
 }
 
 func (s Site) isCommand() bool {

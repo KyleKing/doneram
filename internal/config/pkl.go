@@ -49,6 +49,9 @@ type Tool struct {
 	// "PyPI", "Alpine:v3.19"), needed whenever the resolver name alone
 	// doesn't determine it (a distro package, or a Go module).
 	Ecosystem string `json:"ecosystem"`
+	// EOL names the endoflife.date product whose cycle the pin belongs to
+	// (e.g. "nodejs", "amazon-aurora-postgresql").
+	EOL string `json:"eol"`
 }
 
 // Config is a repo's .doneram.pkl, evaluated to JSON.
@@ -100,6 +103,7 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 				Command:        tool.Command,
 				CommandPattern: tool.CommandPattern,
 				Ecosystem:      tool.Ecosystem,
+				EOL:            tool.EOL,
 			})
 			continue
 		}
@@ -112,6 +116,7 @@ func (c *Config) Sites(baseDir string) []engine.Site {
 				Command:        tool.Command,
 				CommandPattern: tool.CommandPattern,
 				Ecosystem:      tool.Ecosystem,
+				EOL:            tool.EOL,
 				Locator: locator.Locator{
 					Glob:     filepath.Join(baseDir, site.File),
 					Pattern:  site.Pattern,

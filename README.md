@@ -221,6 +221,16 @@ version that clears it, even when that version is younger than the window.
 reports a currently-pinned version that has since been yanked, because that
 one is already installed everywhere.
 
+## End of life
+
+A tool that sets `eol` to an [endoflife.date](https://endoflife.date)
+product (`nodejs`, `python`, `amazon-aurora-postgresql`) gets the end-of-life
+date of the cycle its current pin belongs to, in the report and under `eol`
+in the JSON summary with `daysLeft`. The cycle is the longest one the pin
+equals or starts with at a dot, so `3.13.5` is `3.13` and `17.11` is `17`. A
+pin no cycle covers fails the run. doneram reports the date and leaves the
+threshold to whoever reads the summary.
+
 ## Vulnerabilities
 
 Advisories come from [OSV](https://osv.dev), which covers PyPI, npm, Go,

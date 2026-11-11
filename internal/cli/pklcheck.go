@@ -13,9 +13,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/kyleking/doneram/internal/config"
 	"github.com/kyleking/doneram/internal/engine"
+	"github.com/kyleking/doneram/internal/eol"
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/osv"
@@ -63,6 +65,16 @@ type pklSiteSummary struct {
 	Vulnerabilities []pklVulnSummary `json:"vulnerabilities,omitempty"`
 	PatchedVersion  string           `json:"patchedVersion,omitempty"`
 	HeldVulnerable  bool             `json:"heldVulnerable,omitempty"`
+	EOL             *pklEOLSummary   `json:"eol,omitempty"`
+}
+
+// pklEOLSummary is the end-of-life date of the cycle a site's current pin
+// belongs to. Date is empty while endoflife.date publishes none.
+type pklEOLSummary struct {
+	Product  string `json:"product"`
+	Cycle    string `json:"cycle"`
+	Date     string `json:"date,omitempty"`
+	DaysLeft *int   `json:"daysLeft,omitempty"`
 }
 
 // pklVulnSummary is one advisory found for a site's pin, whether from OSV
@@ -93,6 +105,8 @@ type pklRun struct {
 	// failOnDrift turns an out-of-date pin into a non-zero exit, for a CI
 	// job that goes red rather than opening a pull request.
 	failOnDrift bool
+	// eol overrides the endoflife.date client, nil meaning the public API.
+	eol *eol.Client
 }
 
 // report is the running commentary. The json format keeps stdout clean for
@@ -149,6 +163,12 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	scanner, _ := vulnscan.Detect()
 	vulnResults := vulncheck.Check(ctx, results, osvClient, scanner)
 
+	eolClient := run.eol
+	if eolClient == nil {
+		eolClient = eol.New(httpClient)
+	}
+	now := time.Now()
+
 	var mismatches, unresolved, patchFailures int
 	var patchedAny bool
 	summary := pklSummary{Results: make([]pklSiteSummary, 0, len(results))}
@@ -181,6 +201,19 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 
 		siteSummary := summarizeSite(result, vuln)
+		if result.Err == nil && result.Site.EOL != "" && siteSummary.Current != "" {
+			status, err := eolClient.Lookup(ctx, result.Site.EOL, siteSummary.Current)
+			if err != nil {
+				out.printf("? %s: %v\n", result.Site.Tool, err)
+				siteSummary.Error = err.Error()
+				unresolved++
+			} else {
+				siteSummary.EOL = summarizeEOL(status, now)
+				if repeats >= 0 {
+					out.printf("    %s\n", eolLine(siteSummary.EOL))
+				}
+			}
+		}
 		siteSummary.needsUpdate = result.Err == nil && siteNeedsPatch(result)
 
 		if apply && siteSummary.needsUpdate {
@@ -384,6 +417,27 @@ func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSumma
 		s.Held = hold.HoldReason
 	}
 	return s
+}
+
+func summarizeEOL(status eol.Status, now time.Time) *pklEOLSummary {
+	s := &pklEOLSummary{Product: status.Product, Cycle: status.Cycle}
+	if !status.Date.IsZero() {
+		days := status.DaysLeft(now)
+		s.Date = status.Date.Format(time.DateOnly)
+		s.DaysLeft = &days
+	}
+	return s
+}
+
+func eolLine(s *pklEOLSummary) string {
+	switch {
+	case s.DaysLeft == nil:
+		return fmt.Sprintf("eol: %s %s has no published end-of-life date", s.Product, s.Cycle)
+	case *s.DaysLeft < 0:
+		return fmt.Sprintf("eol: %s %s reached end of life on %s", s.Product, s.Cycle, s.Date)
+	default:
+		return fmt.Sprintf("eol: %s %s ends %s (%d days)", s.Product, s.Cycle, s.Date, *s.DaysLeft)
+	}
 }
 
 // siteNeedsPatch reports whether result found a site whose current value on
