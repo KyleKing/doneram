@@ -1,3 +1,9 @@
+## v0.5.0 (2026-11-11)
+
+### Feat
+
+- **eol**: report the end-of-life date of each pin's release cycle
+
 ## v0.4.0 (2026-09-03)
 
 ### Feat
