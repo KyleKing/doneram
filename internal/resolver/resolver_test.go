@@ -326,3 +326,33 @@ func TestYumResolver_Name(t *testing.T) {
 		t.Errorf("Name() = %s, want yum", r.Name())
 	}
 }
+
+func TestGHCRResolver_AuthenticatesAndFollowsPages(t *testing.T) {
+	server := testutil.NewMockServer(map[string]http.HandlerFunc{
+		"/token": func(w http.ResponseWriter, req *http.Request) {
+			_, _ = w.Write([]byte(`{"token":"anon"}`))
+		},
+		"/v2/org/img/tags/list": func(w http.ResponseWriter, req *http.Request) {
+			if req.Header.Get("Authorization") != "Bearer anon" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			if req.URL.Query().Get("last") == "" {
+				w.Header().Set("Link", `</v2/org/img/tags/list?last=v1.0.0&n=1000>; rel="next"`)
+				_, _ = w.Write([]byte(`{"tags":["v1.0.0"]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"tags":["v2.0.0"]}`))
+		},
+	})
+	defer server.Close()
+
+	r := NewGHCRResolverWithBaseURL(&http.Client{}, server.URL)
+	got, err := r.Resolve(context.Background(), "ghcr.io/org/img", parser.ParsePattern("#.#.#"))
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if got != "v2.0.0" {
+		t.Errorf("Resolve() = %q, want v2.0.0 from the second page", got)
+	}
+}
