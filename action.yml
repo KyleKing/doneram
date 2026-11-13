@@ -1,5 +1,5 @@
 name: 'doneram'
-description: 'Install a pinned doneram release binary onto PATH'
+description: 'Install a pinned doneram release binary onto PATH, plus pkl when the runner lacks it'
 author: 'kyleking'
 
 branding:
@@ -11,17 +11,21 @@ inputs:
     description: 'doneram version to install (default: latest release)'
     required: false
     default: 'latest'
+  pkl-version:
+    description: 'pkl version installed only when pkl is not already on PATH (default: latest release)'
+    required: false
+    default: 'latest'
 
 runs:
   using: 'composite'
   steps:
-    - name: Resolve version
+    - name: Resolve doneram version
       id: version
       shell: bash
       run: |
         set -euo pipefail
         if [ "${{ inputs.version }}" = "latest" ]; then
-          VERSION=$(curl -fsSL https://api.github.com/repos/kyleking/doneram/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION=$(curl -fsSL https://api.github.com/repos/kyleking/doneram/releases/latest | jq -r .tag_name)
         else
           VERSION="${{ inputs.version }}"
         fi
@@ -52,8 +56,52 @@ runs:
           DEST="${DEST}.exe"
         fi
 
-        URL="https://github.com/kyleking/doneram/releases/download/${VERSION}/${BIN}"
-        echo "Installing doneram ${VERSION} from ${URL}"
+        BASE="https://github.com/kyleking/doneram/releases/download/${VERSION}"
+        echo "Installing doneram ${VERSION} from ${BASE}/${BIN}"
+
+        mkdir -p "$DEST_DIR"
+        curl -fsSL -o "$DEST" "${BASE}/${BIN}"
+        curl -fsSL -o "$DEST_DIR/checksums.txt" "${BASE}/checksums.txt"
+
+        EXPECTED=$(awk -v b="$BIN" '$2 == b { print $1 }' "$DEST_DIR/checksums.txt")
+        if [ -z "$EXPECTED" ]; then
+          echo "no checksum entry for ${BIN} in checksums.txt" >&2
+          exit 1
+        fi
+        echo "${EXPECTED}  ${DEST}" | shasum -a 256 -c -
+        chmod +x "$DEST"
+
+        echo "$DEST_DIR" >> "$GITHUB_PATH"
+
+    - name: Install pkl
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v pkl >/dev/null 2>&1; then
+          echo "pkl already on PATH: $(pkl --version)"
+          exit 0
+        fi
+
+        PKL_VERSION="${{ inputs.pkl-version }}"
+        if [ "$PKL_VERSION" = "latest" ]; then
+          PKL_VERSION=$(curl -fsSL https://api.github.com/repos/apple/pkl/releases/latest | jq -r .tag_name)
+        fi
+
+        case "${{ runner.os }}:${{ runner.arch }}" in
+          Linux:X64) ASSET=pkl-linux-amd64 ;;
+          Linux:ARM64) ASSET=pkl-linux-aarch64 ;;
+          macOS:ARM64) ASSET=pkl-macos-aarch64 ;;
+          Windows:X64) ASSET=pkl-windows-amd64.exe ;;
+          *) echo "no pkl binary for ${{ runner.os }}/${{ runner.arch }}" >&2; exit 1 ;;
+        esac
+
+        DEST_DIR="${RUNNER_TEMP}/pkl-bin"
+        DEST="$DEST_DIR/pkl"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          DEST="${DEST}.exe"
+        fi
+        URL="https://github.com/apple/pkl/releases/download/${PKL_VERSION}/${ASSET}"
+        echo "Installing pkl ${PKL_VERSION} from ${URL}"
 
         mkdir -p "$DEST_DIR"
         curl -fsSL -o "$DEST" "$URL"
