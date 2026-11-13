@@ -7,8 +7,8 @@
 // run. A pattern that silently stops matching is how a pin goes stale
 // unnoticed.
 
-amends "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
-import "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
+amends "package://github.com/kyleking/doneram/releases/download/v0.6.1/doneram@0.6.1#/Config.pkl"
+import "package://github.com/kyleking/doneram/releases/download/v0.6.1/doneram@0.6.1#/Config.pkl"
 
 local ciYml = ".github/workflows/ci.yml"
 local bumpYml = ".github/workflows/bump_version.yml"

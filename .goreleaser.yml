@@ -6,7 +6,9 @@ before:
   hooks:
     - go mod tidy
     - go test ./...
-    - cd pkl && VERSION={{ .Version }} pkl project package .
+    # Hooks exec without a shell: env(1) sets VERSION, and the project dir is
+    # an argument rather than a cd. Output lands in ./.out (cwd-relative).
+    - env VERSION={{ .Version }} pkl project package pkl
 
 builds:
   - main: ./cmd/doneram
@@ -60,11 +62,11 @@ release:
     name: doneram
   draft: false
   prerelease: auto
-  # The pkl package artifacts `pkl project package` writes under pkl/.out, so
+  # The pkl package artifacts `pkl project package` writes under ./.out, so
   # `package://github.com/kyleking/doneram/releases/download/<tag>/doneram@<ver>`
   # resolves for every repo's `.doneram.pkl`.
   extra_files:
-    - glob: ./pkl/.out/doneram@*/doneram@*
+    - glob: ./.out/doneram@*/doneram@*
 
 homebrew_casks:
   - name: doneram

@@ -3,8 +3,8 @@
 /// A repo's config amends this module and fills in `tools`:
 ///
 /// ```pkl
-/// amends "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
-/// import "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
+/// amends "package://github.com/kyleking/doneram/releases/download/v0.6.1/doneram@0.6.1#/Config.pkl"
+/// import "package://github.com/kyleking/doneram/releases/download/v0.6.1/doneram@0.6.1#/Config.pkl"
 ///
 /// tools = new {
 ///   ["checkout"] = new {
