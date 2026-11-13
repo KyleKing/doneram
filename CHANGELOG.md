@@ -1,3 +1,10 @@
+## v0.6.0 (2026-11-13)
+
+### Feat
+
+- **action**: checksum-verify the release binary and install pkl when absent
+- publish the config schema as a versioned pkl package
+
 ## v0.5.1 (2026-11-11)
 
 ### Fix
