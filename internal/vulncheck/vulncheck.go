@@ -27,8 +27,8 @@ type Finding struct {
 // patched version a vulnerable pin reports alongside its normal Latest
 // candidate. The zero Result means nothing was found.
 //
-// TODO(M6): a version that clears an advisory should waive the minimum
-// release age once that system exists; there is no age gate yet to waive.
+// TODO(M6): a version that clears an advisory should waive the --min-age
+// cooldown; the patched version is not yet fed back into the patch decision.
 type Result struct {
 	Findings       []Finding
 	PatchedVersion string

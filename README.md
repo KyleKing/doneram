@@ -240,9 +240,10 @@ shells out to trivy or grype, which read the image layers statically rather
 than running the container.
 
 A vulnerable pin reports two candidates, labeled: the minimum patched
-version, and the latest version matching the pin's own pattern. A CVE fix
-waives the minimum release age, and the report says so rather than taking a
-rushed security release quietly.
+version, and the latest version matching the pin's own pattern. The release
+age is not yet waived for a fix, so a cooldown can delay a security release
+it does not hide — the advisory and the version that clears it are reported
+either way.
 
 A hold is never overridden. When the only fix sits above the ceiling, the
 report says held, vulnerable, and no fix underneath it, and leaves the call
@@ -254,10 +255,14 @@ doneram writes a JSON summary; the workflow turns it into a pull request.
 
 ```yaml
 name: Freshness
-on:
+
+"on":
   schedule:
     - cron: "0 9 * * 1"
-  workflow_dispatch:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -265,19 +270,35 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      HAS_APP: ${{ secrets.DONERAM_APP_CLIENT_ID != '' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: kyleking/doneram@v1
+      - uses: kyleking/doneram@c5120304a06b6c524a9b96dd6408b01e8b453e65 # v0.5.1
+        with:
+          version: v0.5.1
 
       - id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: doneram update --output /tmp/doneram.json
 
-      - uses: peter-evans/create-pull-request@v8
-        if: fromJSON(steps.check.outputs.has_upgrades)
+      # A GITHUB_TOKEN push cannot touch workflow files, so the app token is
+      # used when the repo has the secrets and the default token otherwise.
+      - id: app-token
+        if: env.HAS_APP == 'true' && steps.check.outputs.has_upgrades == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
+          client-id: ${{ secrets.DONERAM_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DONERAM_APP_PRIVATE_KEY }}
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        if: steps.check.outputs.has_upgrades == 'true'
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           branch: chore/doneram-updates
           draft: true
           delete-branch: true

@@ -126,101 +126,10 @@ yanked, since that one is already installed everywhere.
 - Build validation stops being the headline and becomes one validation
   command among several. Managing versions is the value.
 
-## M1: Locator engine
-
-The regex-capture-and-patch primitive, independent of Dockerfile syntax.
-
-- A `locator` package: glob, pattern with one capture group, expected match
-  count, patch-in-place
-- Match count that disagrees with `expect` fails the run and prints ranked
-  candidates from a loosened rescan
-- pkl config loading via `pkl eval -f json`, with a published `Config.pkl`
-  schema module
-- `internal/parser` compiles `# doneram:` comments into locators rather than
-  resolving them itself
-
-Done when `doneram check` reads `../my_go_template/.doneram.pkl`, reports all
-13 tools across 17 sites, and the existing Dockerfile tests still pass
-unchanged.
-
-## M2: Resolvers
-
-- mise, shelling out, covering every tool in its registry
-- GitHub release, with the prerelease-tag filtering `checkers.py` does
-- GitHub commit-by-branch, reporting commits and time behind, the pinned
-  commit's own date, and a warning when the repo has tags newer than the pin
-- CDNJS, with a warning when it disagrees with the library's GitHub releases
-- Command resolver: run a command, parse name/current/latest by regex
-- Hold with reason and ceiling, applied through the existing `VersionPattern`
-
-Done when every pin in wave 1 resolves, and doneram's report agrees with the
-Python scripts run side by side.
-
-## M3: Wave 1 migration
-
-my_go_template, yak-shears, and wavez. Chosen together because the template
-and its child have to agree, and yak-shears carries the pin shapes neither Go
-repo has (bash variable default, branch-HEAD SHA with no upstream tags, HTML
-CDN marker, hold comment, uv dependency tree).
-
-- Patching, `--apply`, and the JSON summary contract
-- `afterPatch` command, so patching my_go_template regenerates `.ctt`
-- Scheduled workflow in each repo, opening a standing draft PR
-- wavez tracks only the pins it owns, since its mise tools, hk.pkl, and ci
-  and bump_version workflows arrive from my_go_template through copier and
-  patching them locally would only make the next update a merge
-
-Done when `scripts/freshness/` and `check_freshness.py` are deleted from
-yak-shears and my_go_template, and a scheduled run has opened a real PR in
-each of the three.
-
-## M4: Release
-
-calcipy_template cannot ship a copied script into generated projects and
-should not ship a `go install` either.
-
-- Homebrew tap, GitHub release binaries, a pinned composite action
-- Version validation and constraints documented
-- doneram checks its own pins with its own config
-
-Done when a generated project can run doneram from a pinned action without
-building from source.
-
-## M5: Wave 2 migration
-
-calcipy_template and tail-jsonl, held back until wave 1 proves the schema,
-because calcipy_template reproduces whatever it does into every project
-generated from it.
-
-- calcipy_template's `.jinja` action pins, grouped so one action patches
-  across every file it appears in
-- CDNJS pins in `mkdocs.yml.jinja`
-- The existing `freshness-check.yml` workflow rewired to doneram's JSON,
-  keeping `peter-evans/create-pull-request`
-- The doneram config itself templated into generated projects
-
-Done when `check_cdnjs_updates.py`, `check_freshness.py`, and
-`scripts/freshness/` are gone from calcipy_template, and a project generated
-from it gets freshness checks from a pinned doneram action.
-
 ## M5.5: Fleet correctness and ergonomics
 
 Wave 1 and wave 2 shipped, and running doneram across 13 repos exposed gaps
 no single-repo milestone could surface.
-
-### The schema is copy-pasted, and it has drifted
-
-Every `.doneram.pkl` inlines its own `Site` and `Tool` classes, because
-doneram publishes no pkl package. Three variants exist today: six repos
-declare `expect: Int(this > 0) = 1`, seven declare `expect: Int(this > 0)?`,
-and yak-shears added `pattern: String?` before the others had it. The `= 1`
-default makes the "one or more" match count unreachable in the six repos
-carrying it, so the fix for count drift is not in effect where it was
-written.
-
-Publishing `Config.pkl` as a pkl package and amending it from each repo
-turns a schema change into a version bump. It lands before anything else
-adds a field.
 
 ### The `ecosystem` field cannot be set
 
@@ -229,24 +138,6 @@ declares it, so M6's OSV lookup only fires where a resolver kind carries a
 default mapping. Of 82 resolver declarations across the fleet, 54 are
 `github-action`, 13 `github-release`, 10 `mise`, and 2 `npm`. Two pins are
 eligible for an advisory query.
-
-### Resolution is serial and repeats itself (done)
-
-45 sites in my_go_template took 10.1s of wall clock at 0.33s of user time,
-so it was all waiting. `RunSites` was a plain `for` loop with no
-concurrency and no memoization, and those 45 sites cover 26 distinct tools,
-so 19 resolutions asked a question already answered (setup-go four times,
-hk three). `RunSites` now runs eight sites at a time and routes every
-resolve, detail, and command through a single-flight cache, which takes the
-same run to 2.25s.
-
-Rate limiting was the other half. The retry transport backed off on a 429
-but nothing paced requests, and unauthenticated GitHub is 60 requests an
-hour, which is what made the first CI run report 20 unresolved sites and
-exit 0. A per-host limiter now caps four requests in flight per host and
-reads `x-ratelimit-remaining`; a host that reports its quota spent fails
-the rest of the run immediately with the reset time, because an hour-long
-window outlasts any backoff a single run can afford.
 
 ### `GITHUB_OUTPUT` uses a fixed heredoc delimiter
 
@@ -280,10 +171,16 @@ remains:
 - `check --apply` and `update` do the same thing on the config path
 - Every unresolved site and every count mismatch collapses into one exit
   code, so a workflow cannot tell one kind of breakage from another
+- `go test ./...` fails on a machine without a running Docker daemon:
+  `TestDockerQuerier_QueryPackages` guards on `testing.Short()` only. Gate
+  on daemon reachability or make `mise run test` pass `-short`
+- `internal/builder` holds its coverage near 30% because Build, Validate,
+  and Cleanup shell out to `docker` with no seam. A command-runner
+  interface would let the gate rise
+- `go` is not pinned in `mise.toml`, so a local toolchain can drift from
+  the `go.mod` version CI builds against
 
-Done when the fleet amends a published schema, a full check of
-my_go_template finishes in about a second, and every pin in the fleet is
-eligible for an advisory lookup.
+Done when every pin in the fleet is eligible for an advisory lookup.
 
 ## M6: Vulnerability awareness
 
@@ -424,6 +321,7 @@ fix under its ceiling is visible as such.
   and handing the lock back to uv is agreed; the split between the two is
   not drawn.
 - pkl-go bindings.
+- Exporting the changelog on breaking changes, to help with upgrades.
 - Terraform and Pulumi pins, version half and vulnerability half both.
 - Generalizing validation commands beyond Docker build and healthcheck.
   Formatters and syntax checks (`ruff`, `tombi`, `pkl eval`) are the obvious
