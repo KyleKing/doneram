@@ -1,3 +1,9 @@
+## v0.6.1 (2026-11-13)
+
+### Fix
+
+- **release**: run the pkl packaging hook without a shell
+
 ## v0.6.0 (2026-11-13)
 
 ### Feat
