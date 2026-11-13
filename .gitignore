@@ -8,6 +8,9 @@
 
 # Test coverage
 coverage.out
+
+# pkl project package output
+.out/
 *.test
 
 # Environment

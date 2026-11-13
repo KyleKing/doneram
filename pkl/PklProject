@@ -1,0 +1,13 @@
+amends "pkl:Project"
+
+package {
+  name = "doneram"
+  authors { "Kyle King <kyleking@users.noreply.github.com>" }
+  version = read?("env:VERSION") ?? "0.0.1-SNAPSHOT"
+  baseUri = "package://github.com/kyleking/doneram/releases/download/v\(version)/doneram"
+  packageZipUrl = "https://github.com/kyleking/doneram/releases/download/v\(version)/doneram@\(version).zip"
+  sourceCode = "https://github.com/kyleking/doneram"
+  sourceCodeUrlScheme = "https://github.com/kyleking/doneram/blob/v\(version)/pkl%{path}#%{line}-%{endLine}"
+  license = "MIT"
+  description = "doneram's .doneram.pkl schema, amended by each repo's config"
+}

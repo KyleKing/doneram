@@ -6,32 +6,9 @@
 // A site that matches a different number of times than `expect` fails the
 // run. A pattern that silently stops matching is how a pin goes stale
 // unnoticed.
-//
-// The schema is inlined so this file evaluates today. It amends doneram's
-// published Config.pkl once doneram ships a pkl package.
 
-class Site {
-  /// Repo-relative path to the file holding the literal.
-  file: String
-  /// Regex with exactly one capture group around the version.
-  pattern: String
-  expect: Int(this > 0) = 1
-}
-
-/// Keeps taking updates below `max`, so a known break blocks only the majors
-/// past it rather than freezing the pin.
-class Hold {
-  reason: String
-  max: String?
-}
-
-class Tool {
-  resolver: String = "mise"
-  /// Name to query when it differs from the map key, e.g. "pipx:commitizen".
-  resolverName: String?
-  sites: Listing<Site>
-  hold: Hold?
-}
+amends "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
+import "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
 
 local ciYml = ".github/workflows/ci.yml"
 local bumpYml = ".github/workflows/bump_version.yml"
@@ -41,13 +18,13 @@ local miseToml = "mise.toml"
 /// A `uses: owner/repo@<sha> # <tag>` GitHub Action pin, one capture group
 /// spanning the sha and the tag together, since github-action patches both
 /// as a single resolved value.
-local function actionPin(action: String, sourceFile: String, count: Int): Site = new {
+local function actionPin(action: String, sourceFile: String, count: Int): Config.Site = new {
   file = sourceFile
   pattern = #"\#(action)@([0-9a-f]{40} # v[\d.]+)"#
   expect = count
 }
 
-tools: Mapping<String, Tool> = new {
+tools = new {
   ["checkout"] = new {
     resolver = "github-action"
     resolverName = "actions/checkout"
@@ -61,7 +38,7 @@ tools: Mapping<String, Tool> = new {
     resolver = "github-branch"
     resolverName = "commitizen-tools/commitizen-action@master"
     sites = new {
-      new Site {
+      new Config.Site {
         file = bumpYml
         pattern = #"commitizen-tools/commitizen-action@([0-9a-f]{40}) # master"#
       }
@@ -77,10 +54,24 @@ tools: Mapping<String, Tool> = new {
     resolverName = "peter-evans/create-pull-request"
     sites = new { actionPin("peter-evans/create-pull-request", freshnessYml, 1) }
   }
+  ["doneram-schema"] = new {
+    resolver = "github-release"
+    resolverName = "kyleking/doneram"
+    sites = new {
+      new Config.Site {
+        file = ".doneram.pkl"
+        pattern = #"releases/download/v([\d.]+)/doneram"#
+      }
+      new Config.Site {
+        file = ".doneram.pkl"
+        pattern = #"doneram@([\d.]+)#/Config\.pkl"#
+      }
+    }
+  }
   ["go"] = new {
     resolverName = "go"
     sites = new {
-      new Site {
+      new Config.Site {
         file = ciYml
         pattern = #"go-version: '([\d.]+)'"#
         expect = 2
@@ -90,11 +81,11 @@ tools: Mapping<String, Tool> = new {
   ["golangci-lint"] = new {
     resolverName = "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
     sites = new {
-      new Site {
+      new Config.Site {
         file = miseToml
         pattern = #""go:github\.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "([\d.]+)""#
       }
-      new Site {
+      new Config.Site {
         file = ciYml
         pattern = #"version: v([\d.]+)"#
       }
@@ -121,7 +112,7 @@ tools: Mapping<String, Tool> = new {
   }
   ["pkl"] = new {
     sites = new {
-      new Site {
+      new Config.Site {
         file = miseToml
         pattern = #"pkl = "([\d.]+)""#
       }

@@ -1,0 +1,85 @@
+/// doneram's `.doneram.pkl` schema.
+///
+/// A repo's config amends this module and fills in `tools`:
+///
+/// ```pkl
+/// amends "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
+/// import "package://github.com/kyleking/doneram/releases/download/v0.6.0/doneram@0.6.0#/Config.pkl"
+///
+/// tools = new {
+///   ["checkout"] = new {
+///     resolver = "github-action"
+///     resolverName = "actions/checkout"
+///     sites = new {
+///       new Config.Site {
+///         file = ".github/workflows/ci.yml"
+///         pattern = #"actions/checkout@([0-9a-f]{40} # v[\d.]+)"#
+///       }
+///     }
+///   }
+/// }
+/// ```
+@ModuleInfo { minPklVersion = "0.26.0" }
+module doneram.Config
+
+/// One literal in one file (or glob of files) holding a version.
+class Site {
+  /// Repo-relative path to the file holding the literal.
+  file: String
+  /// Regex with exactly one capture group around the version.
+  pattern: String
+  /// An exact match count. Unset takes one or more.
+  expect: Int(this > 0)?
+  /// How many consecutive lines the pattern matches against at once, for a
+  /// version tied to context on another line (a pre-commit hook's `rev:`
+  /// under its `repo:` URL). The pattern must anchor on text unique to that
+  /// window, or an occurrence counts twice across overlapping windows.
+  window: Int(this > 0) = 1
+}
+
+/// Keeps taking updates below `max`, so a known break blocks only the
+/// versions past it rather than freezing the pin.
+class Hold {
+  reason: String
+  max: String?
+}
+
+/// One dependency tracked across one or more sites, or, when `command` is
+/// set, a single command-resolver site with no file to locate a pin in.
+class Tool {
+  /// Registry the version resolves through. `mise` covers any tool in its
+  /// registry; the rest name the registry directly (`docker`, `ghcr`,
+  /// `npm`, `pypi`, `cargo`, `composer`, `rubygems`, `apk`, `apt`, `yum`,
+  /// `github-release`, `github-branch`, `github-action`, `cdnjs`).
+  resolver: String = "mise"
+  /// Name to query when it differs from the map key, e.g.
+  /// "owner/repo" or "pipx:commitizen".
+  resolverName: String?
+  sites: Listing<Site> = new {}
+  hold: Hold?
+  /// Overrides the default `#.#.#` constraint, for a pin that only ever
+  /// ships with a suffix (a prerelease tracked on purpose, e.g.
+  /// "4.0.0-alpha.*").
+  pattern: String?
+  /// Resolves through a command's output instead of a registry, for a
+  /// version only the project's own resolver knows, e.g.
+  /// `uv tree --outdated`. With sites, the command answers what the newest
+  /// version is and the sites say where to write it.
+  command: String?
+  /// Regex with "name", "current", and "latest" named groups, applied to
+  /// the command's output line by line. Make `latest` optional so an entry
+  /// without a newer version reads as current.
+  commandPattern: String?
+  /// The OSV ecosystem this pin belongs to (e.g. "PyPI", "Alpine:v3.19"),
+  /// needed whenever the resolver name alone doesn't determine it (a
+  /// distro package, or a Go module).
+  ecosystem: String?
+  /// The endoflife.date product whose cycle the pin belongs to (e.g.
+  /// "nodejs", "amazon-aurora-postgresql").
+  eol: String?
+}
+
+/// Runs after a successful patch, from the directory holding the config.
+afterPatch: String?
+
+tools: Mapping<String, Tool>
