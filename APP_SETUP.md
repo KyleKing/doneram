@@ -20,12 +20,14 @@ installation token can, and it expires an hour after the job mints it.
 Everything running Freshness — the app edits workflow files wherever it runs:
 
 ```sh
-REPOS="app-template aragonite backup-yak-shears-py calcipy calcipy_template
-chartui copier-template-tester corallium db-slice diacea djot-fmt doner
-extract_finances gh-lazydispatch gh-repo-dashboard gh-star-search gh-sweep
-jj-diff jj-tui mdformat-hugo mdformat-plugin-template mise-postgres-binary
-my_go_template my_lua_template recipes second-look tail-cw tail-jsonl tlr
-types-for-jinja vcr-tui wavez what-did-ai-do yak-shears"
+REPOS=(
+  app-template aragonite backup-yak-shears-py calcipy calcipy_template
+  chartui copier-template-tester corallium db-slice diacea djot-fmt doner
+  extract_finances gh-lazydispatch gh-repo-dashboard gh-star-search gh-sweep
+  jj-diff jj-tui mdformat-hugo mdformat-plugin-template mise-postgres-binary
+  my_go_template my_lua_template recipes second-look tail-cw tail-jsonl tlr
+  types-for-jinja vcr-tui wavez what-did-ai-do yak-shears
+)
 ```
 
 ## What is left to do
@@ -56,7 +58,7 @@ to accept new permissions, accept them.
 ```sh
 CLIENT_ID=<the client id>
 KEY=~/Downloads/doneram.<date>.private-key.pem
-for r in $REPOS; do
+for r in "${REPOS[@]}"; do
   gh secret set DONERAM_APP_CLIENT_ID --repo kyleking/$r --body "$CLIENT_ID"
   gh secret set DONERAM_APP_PRIVATE_KEY --repo kyleking/$r < "$KEY"
 done
