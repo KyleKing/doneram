@@ -1,3 +1,9 @@
+## v2.0.1 (2026-11-21)
+
+### Fix
+
+- list each pinned line once in doneram explain, and read template rules first (#21)
+
 ## v2.0.0 (2026-11-21)
 
 ### BREAKING CHANGE
