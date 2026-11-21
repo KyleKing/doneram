@@ -119,6 +119,9 @@ type pklRun struct {
 	// failOnDrift turns an out-of-date pin into a non-zero exit, for a CI
 	// job that goes red rather than opening a pull request.
 	failOnDrift bool
+	// failOnVuln turns a pin with a known advisory still on disk into a
+	// non-zero exit, for a CI gate that blocks on CVEs.
+	failOnVuln bool
 	// eol overrides the endoflife.date client, nil meaning the public API.
 	eol *eol.Client
 }
@@ -148,7 +151,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	if path != "" {
 		loaded, err := config.Load(path)
 		if err != nil {
-			return fmt.Errorf("loading %s: %w", path, err)
+			return &ExitError{Code: ExitConfig, Err: fmt.Errorf("loading %s: %w", path, err)}
 		}
 		cfg = loaded
 		baseDir = filepath.Dir(path)
@@ -173,7 +176,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 
 	sites, err := selectSites(all, run.only)
 	if err != nil {
-		return err
+		return &ExitError{Code: ExitConfig, Err: err}
 	}
 	if len(sites) == 0 {
 		out.printf("%s declares no tools and has no discoverable pins\n", path)
@@ -292,17 +295,42 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	}
 
 	if failed := mismatches + unresolved + patchFailures; failed > 0 {
-		return fmt.Errorf(
+		code := ExitUnresolved
+		switch {
+		case patchFailures > 0:
+			code = ExitPatch
+		case mismatches > 0:
+			code = ExitMismatch
+		}
+		return exitf(code,
 			"%d of %d site(s) failed: %d match-count, %d unresolved, %d patch",
 			failed, len(results), mismatches, unresolved, patchFailures,
 		)
 	}
 
+	if run.failOnVuln {
+		if n := countVulnerable(summary); n > 0 {
+			return exitf(ExitVulnerable, "%d site(s) still pin a version with a known advisory", n)
+		}
+	}
+
 	if run.failOnDrift && summary.HasUpgrades {
-		return fmt.Errorf("%d pin(s) are out of date", countDrift(summary))
+		return exitf(ExitDrift, "%d pin(s) are out of date", countDrift(summary))
 	}
 
 	return nil
+}
+
+// countVulnerable counts sites whose pin on disk still has an advisory: a
+// security fix proposed but not applied leaves the old version in place.
+func countVulnerable(summary pklSummary) int {
+	var n int
+	for _, s := range summary.Results {
+		if len(s.Vulnerabilities) > 0 && (!s.Updated || !s.Security) {
+			n++
+		}
+	}
+	return n
 }
 
 func countDrift(summary pklSummary) int {

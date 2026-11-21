@@ -171,8 +171,6 @@ Each updated GitHub pin now carries a compare link in the PR body. What
 remains:
 
 - `check --apply` and `update` do the same thing on the config path
-- Every unresolved site and every count mismatch collapses into one exit
-  code, so a workflow cannot tell one kind of breakage from another
 - `internal/builder` holds its coverage near 30% because Build, Validate,
   and Cleanup shell out to `docker` with no seam. A command-runner
   interface would let the gate rise
@@ -180,7 +178,8 @@ remains:
   the `go.mod` version CI builds against. CI and every workflow now read
   `go-version-file: go.mod`, so the weekly gomod step is the only owner
 
-Shipped since: discovery of SHA-pinned actions and mise tools with no
+Shipped since: distinct exit codes per failure kind plus a
+`--fail-on-vuln` CVE gate, discovery of SHA-pinned actions and mise tools with no
 config, pins keeping the precision they were written with (`v2.12` moves to
 `v2.15`), one PR row per distinct move rather than per site, and a major
 action bump graded safe, review, or breaking against how the workflow uses

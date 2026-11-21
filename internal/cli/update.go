@@ -49,6 +49,10 @@ func newUpdateCommand() *cli.Command {
 				Name:  "fail-on-drift",
 				Usage: "exit non-zero when a pin is out of date, instead of reporting drift and exiting 0",
 			},
+			&cli.BoolFlag{
+				Name:  "fail-on-vuln",
+				Usage: "exit 7 when a pin with a known advisory is still on disk after the run",
+			},
 			&cli.DurationFlag{
 				Name:  "min-age",
 				Usage: "hold back a release until it is this old, matching Dependabot's three-day default; 0 disables",
@@ -91,6 +95,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				only:        cmd.StringSlice("only"),
 				format:      format,
 				failOnDrift: cmd.Bool("fail-on-drift"),
+				failOnVuln:  cmd.Bool("fail-on-vuln"),
 			})
 		}
 		if path := cmd.String("config"); path != "" {
@@ -106,6 +111,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				only:        cmd.StringSlice("only"),
 				format:      format,
 				failOnDrift: cmd.Bool("fail-on-drift"),
+				failOnVuln:  cmd.Bool("fail-on-vuln"),
 			})
 		}
 	}

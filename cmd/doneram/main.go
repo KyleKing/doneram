@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 
@@ -25,6 +26,10 @@ func main() {
 	app := cli.NewApp(version, commit, date)
 	if err := app.Run(ctx, os.Args); err != nil {
 		logger.Error("application error", "error", err)
+		var coder interface{ ExitCode() int }
+		if errors.As(err, &coder) {
+			os.Exit(coder.ExitCode())
+		}
 		os.Exit(1)
 	}
 }

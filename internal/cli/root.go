@@ -16,6 +16,10 @@ func NewApp(version, commit, date string) *cli.Command {
 		Usage:   "Version pin maintainer for Dockerfiles and .doneram.pkl config sites",
 		Version: version,
 		Before:  setupLogging,
+		// main picks the exit code from the returned error; urfave/cli's
+		// default would print it and os.Exit from inside Run, which also
+		// kills a test that drives the app.
+		ExitErrHandler: func(context.Context, *cli.Command, error) {},
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "verbose",
