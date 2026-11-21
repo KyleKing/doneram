@@ -11,6 +11,7 @@ import (
 )
 
 func NewApp(version, commit, date string) *cli.Command {
+	appVersion = version
 	return &cli.Command{
 		Name:    "doneram",
 		Usage:   "Version pin maintainer for Dockerfiles and .doneram.pkl config sites",

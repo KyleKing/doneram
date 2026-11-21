@@ -199,6 +199,7 @@ doneram check --only jq --only hk
 doneram check --format json
 doneram check --fail-on-drift
 doneram check --fail-on-vuln
+doneram check --snapshot snapshot.json
 doneram check --min-age 0
 
 # Patch in place
@@ -319,6 +320,19 @@ fix for one is resolved back to its commit SHA before it is written.
 A hold is never overridden. When the only fix sits above the ceiling, the
 report says held, vulnerable, and no fix underneath it, and leaves the call
 to you.
+
+### Dependabot alerts for every pin
+
+Dependabot reads language manifests and nothing else, so it never sees a
+SHA-pinned action, a tool in mise.toml, or an image tag. `--snapshot
+<path>` writes those pins as a [dependency submission
+snapshot](https://docs.github.com/en/rest/dependency-graph/dependency-submission),
+and once it is posted, GitHub raises Dependabot alerts for them like any
+other dependency. Pins map to purls by resolver: `pypi`, `npm`, `cargo`,
+`gem`, `composer`, `docker`, `github`, `githubactions`, and `golang` for a
+mise `go:` tool; a pin with no purl type is left out. The snapshot records
+what is on disk, including sites whose registry failed to answer.
+`.github/workflows/dependency-graph.yml` submits one on every push to main.
 
 ## GitHub Action
 
