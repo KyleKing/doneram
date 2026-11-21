@@ -1,3 +1,9 @@
+## v0.19.0 (2026-11-21)
+
+### Feat
+
+- discover Terraform provider and module pins, and copier template drift (#15)
+
 ## v0.18.0 (2026-11-21)
 
 ### Feat
