@@ -296,6 +296,20 @@ func TestRunSitesNeverProposesAnOlderVersion(t *testing.T) {
 			wantLatest: "1.22-alpine3.10",
 		},
 		{
+			name:       "floating minor pin keeps its precision",
+			content:    `version: v2.12`,
+			pattern:    `version: v([\d.]+)`,
+			resolved:   "2.15.0",
+			wantLatest: "2.15",
+		},
+		{
+			name:       "floating minor pin already current",
+			content:    `version: v2.15`,
+			pattern:    `version: v([\d.]+)`,
+			resolved:   "2.15.3",
+			wantLatest: "2.15",
+		},
+		{
 			name:       "branch SHA is not compared",
 			content:    `action@ffffffffffffffffffffffffffffffffffffffff # master`,
 			pattern:    `action@([0-9a-f]{40})`,
@@ -327,5 +341,21 @@ func TestRunSitesNeverProposesAnOlderVersion(t *testing.T) {
 				t.Errorf("Behind = %q, want %q", results[0].Behind, tc.wantBehind)
 			}
 		})
+	}
+}
+
+func TestMatchPrecision(t *testing.T) {
+	cases := []struct{ latest, current, want string }{
+		{"2.15.0", "2.12", "2.15"},
+		{"v2.15.0", "v2", "v2"},
+		{"2.15.0", "2.12.2", "2.15.0"},
+		{"1.25", "1.23.4", "1.25"},
+		{"1.22-alpine3.10", "1.21", "1.22-alpine3.10"},
+		{"abc # v4.4.0", "v4", "abc # v4.4.0"},
+	}
+	for _, tc := range cases {
+		if got := matchPrecision(tc.latest, tc.current); got != tc.want {
+			t.Errorf("matchPrecision(%q, %q) = %q, want %q", tc.latest, tc.current, got, tc.want)
+		}
 	}
 }
