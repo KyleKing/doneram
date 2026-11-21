@@ -97,14 +97,50 @@ func Released(commit string) bool {
 
 // Update runs `copier update` to move a project to the template release at
 // tag. Answers already given are reused and new questions take their
-// defaults, so it runs unattended. It does not pass --trust: a template
-// whose update runs tasks or migrations fails here, and the report says
-// to run it by hand, since running a template's code is a decision for a
-// person, not a scheduled job.
-func Update(ctx context.Context, t Template, tag string) (string, error) {
-	cmd := exec.CommandContext(ctx, "copier", "update", "--defaults", "--skip-answered",
-		"--vcs-ref", tag, "--answers-file", filepath.Base(t.AnswersFile))
+// defaults, so it runs unattended. trust passes --trust, which lets the
+// template's tasks and migrations run; without it, a template that has
+// any fails here, and the report says to run it by hand, since running
+// someone else's template code is a decision for a person, not a
+// scheduled job.
+func Update(ctx context.Context, t Template, tag string, trust bool) (string, error) {
+	args := []string{"update", "--defaults", "--skip-answered", "--vcs-ref", tag, "--answers-file", filepath.Base(t.AnswersFile)}
+	if trust {
+		args = append(args, "--trust")
+	}
+	cmd := exec.CommandContext(ctx, "copier", args...)
 	cmd.Dir = filepath.Dir(t.AnswersFile)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
+}
+
+// ownerOf matches the account in a GitHub remote URL, with or without
+// credentials ("https://x-access-token:...@github.com/owner/repo").
+var ownerOf = regexp.MustCompile(`^(?:https://(?:[^@/]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)([A-Za-z0-9_.-]+)/`)
+
+// RepoOwner returns the GitHub account that owns the repository checked out
+// at dir: its origin remote, or GITHUB_REPOSITORY in Actions when the
+// remote is not a GitHub URL. Empty when neither says.
+func RepoOwner(ctx context.Context, dir string) string {
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "remote", "get-url", "origin").Output()
+	if err == nil {
+		if m := ownerOf.FindStringSubmatch(strings.TrimSpace(string(out))); m != nil {
+			return m[1]
+		}
+	}
+	if repo := os.Getenv("GITHUB_REPOSITORY"); strings.Contains(repo, "/") {
+		return strings.SplitN(repo, "/", 2)[0]
+	}
+	return ""
+}
+
+// Trusted reports whether a template's tasks may run unattended: it is
+// listed, or it lives under the same GitHub account as the project, whose
+// owner wrote it.
+func Trusted(t Template, owner string, listed []string) bool {
+	for _, src := range listed {
+		if src == t.Source || (t.Repo != "" && strings.EqualFold(strings.TrimPrefix(src, "gh:"), t.Repo)) {
+			return true
+		}
+	}
+	return owner != "" && t.Repo != "" && strings.EqualFold(strings.SplitN(t.Repo, "/", 2)[0], owner)
 }

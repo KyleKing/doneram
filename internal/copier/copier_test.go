@@ -3,6 +3,7 @@ package copier
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,5 +41,53 @@ func TestScan(t *testing.T) {
 	}
 	if !Released("v1.2.3") || Released("v1.2.3-4-gabcdef1") {
 		t.Error("Released misjudges a tag or a describe string")
+	}
+}
+
+func TestOwned(t *testing.T) {
+	s, err := ParseSettings([]byte("_subdirectory: go_template\n_skip_if_exists:\n  - README.md\n  - go.mod\n  - cmd/\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []string{
+		"copier.yml",
+		"README.md",
+		"go_template/README.md.jinja",
+		"go_template/go.mod.jinja",
+		"go_template/cmd/main.go.jinja",
+		"go_template/.github/workflows/ci.yml.jinja",
+		"go_template/.github/workflows/freshness.yml",
+		"go_template/{% if publish_python %}bindings{% endif %}/pyproject.toml.jinja",
+		"go_template/{{ project_name }}.go.jinja",
+		"go_template/{{ _copier_conf.answers_file }}.jinja",
+	}
+	got := strings.Join(Owned(files, s, ".copier-answers.yml"), ",")
+	want := ".github/workflows/ci.yml,.github/workflows/freshness.yml,bindings/pyproject.toml"
+	if got != want {
+		t.Errorf("Owned = %s, want %s", got, want)
+	}
+}
+
+func TestTrusted(t *testing.T) {
+	tmpl := Template{Source: "gh:KyleKing/my_go_template", Repo: "KyleKing/my_go_template"}
+	cases := []struct {
+		owner  string
+		listed []string
+		want   bool
+	}{
+		{"kyleking", nil, true},
+		{"someone", nil, false},
+		{"", nil, false},
+		{"someone", []string{"gh:KyleKing/my_go_template"}, true},
+		{"someone", []string{"kyleking/my_go_template"}, true},
+		{"someone", []string{"gh:other/template"}, false},
+	}
+	for _, c := range cases {
+		if got := Trusted(tmpl, c.owner, c.listed); got != c.want {
+			t.Errorf("Trusted(owner=%q, listed=%v) = %v, want %v", c.owner, c.listed, got, c.want)
+		}
+	}
+	if m := ownerOf.FindStringSubmatch("https://x-access-token:abc@github.com/acme/app.git"); m == nil || m[1] != "acme" {
+		t.Errorf("ownerOf = %v", m)
 	}
 }

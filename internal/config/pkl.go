@@ -68,6 +68,9 @@ type Config struct {
 	// Ignore names discovered tools to leave unchecked, e.g.
 	// "actions/checkout" or a mise tool name.
 	Ignore []string `json:"ignore"`
+	// TrustTemplates lists copier templates, by _src_path, whose update
+	// may run their tasks and migrations.
+	TrustTemplates []string `json:"trustTemplates"`
 	// Lockfiles checks every package lockfiles resolve against advisories
 	// and raises a vulnerable one through its package manager. Nil means on.
 	Lockfiles *bool `json:"lockfiles"`

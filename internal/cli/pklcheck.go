@@ -18,6 +18,7 @@ import (
 	"github.com/kyleking/doneram/internal/actionrisk"
 	"github.com/kyleking/doneram/internal/changelog"
 	"github.com/kyleking/doneram/internal/config"
+	"github.com/kyleking/doneram/internal/copier"
 	"github.com/kyleking/doneram/internal/discover"
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/eol"
@@ -159,6 +160,9 @@ type pklRun struct {
 	eol *eol.Client
 	// osv overrides the OSV client, nil meaning the public API.
 	osv *osv.Client
+	// templateSource overrides how a copier template's files are listed,
+	// nil meaning the GitHub API.
+	templateSource copier.Source
 	// templateReleases overrides how a copier template's newest release is
 	// found, nil meaning GitHub releases.
 	templateReleases resolver.Resolver
@@ -242,10 +246,21 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 
 	// Floating references are pinned before discovery reads the repo, so
 	// what they become is checked like any other pin in the same run.
+	// Files a copier template maintains are left to the template: their
+	// pins move in its next release and arrive through `copier update`.
+	var owned map[string]string
+	if cfg.DiscoverEnabled() {
+		src := run.templateSource
+		if src == nil {
+			src = copier.GitHubSource{Client: httpclient.New(httpclient.DefaultConfig())}
+		}
+		owned = templateOwnership(ctx, out, baseDir, src)
+	}
+
 	var hardened []pklHardenSummary
 	var hardenFailures int
 	if cfg.DiscoverEnabled() && run.extras() {
-		hardened, hardenFailures, err = hardenRepo(ctx, out, baseDir, apply, run.pin)
+		hardened, hardenFailures, err = hardenRepo(ctx, out, baseDir, apply, run.pin, owned)
 		if err != nil {
 			return fmt.Errorf("pinning floating references: %w", err)
 		}
@@ -260,7 +275,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		if releases == nil {
 			releases = resolver.NewGitHubReleaseResolver(httpclient.New(httpclient.DefaultConfig()))
 		}
-		templates, templateFailures = checkTemplates(ctx, out, baseDir, apply, releases)
+		templates, templateFailures = checkTemplates(ctx, out, baseDir, apply, releases, cfg.TrustTemplates)
 	}
 
 	all := cfg.Sites(baseDir)
@@ -269,6 +284,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		if err != nil {
 			return fmt.Errorf("discovering pins: %w", err)
 		}
+		found = leaveToTemplates(out, owned, found)
 		if all, err = discover.Merge(all, found, cfg.Ignore); err != nil {
 			return fmt.Errorf("discovering pins: %w", err)
 		}
@@ -487,7 +503,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		if !run.extras() {
 			only = patchedLines
 		}
-		refreshed, n, err := refreshDigests(ctx, out, baseDir, run.pin, only)
+		refreshed, n, err := refreshDigests(ctx, out, baseDir, run.pin, only, owned)
 		if err != nil {
 			return fmt.Errorf("refreshing image digests: %w", err)
 		}
@@ -533,7 +549,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 
 	var offenders map[string]string
 	if validating && patchedAny {
-		offenders, summary.Validation = validateAndBisect(ctx, out, cfg, baseDir, snapshot, results, summary, locks, resync, run.pin)
+		offenders, summary.Validation = validateAndBisect(ctx, out, cfg, baseDir, snapshot, results, summary, locks, resync, run.pin, owned)
 	}
 
 	finishSummary(&summary)

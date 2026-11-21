@@ -106,7 +106,7 @@ func gitRestore(ctx context.Context, dir, ref string) error {
 // the offenders, and the output of a failure no bump explains: one that
 // happens with no bump at all, or that remains once every offender found
 // is set aside.
-func validateAndBisect(ctx context.Context, out report, cfg *config.Config, baseDir, snapshot string, results []engine.SiteResult, summary pklSummary, locks []pklLockSummary, resync func(report), pin harden.Resolver) (map[string]string, string) {
+func validateAndBisect(ctx context.Context, out report, cfg *config.Config, baseDir, snapshot string, results []engine.SiteResult, summary pklSummary, locks []pklLockSummary, resync func(report), pin harden.Resolver, owned map[string]string) (map[string]string, string) {
 	ok, output := runValidate(ctx, cfg.Validate, baseDir)
 	if ok {
 		out.printf("\nvalidate passed (%s)\n", cfg.Validate)
@@ -146,7 +146,7 @@ func validateAndBisect(ctx context.Context, out report, cfg *config.Config, base
 		if resync != nil {
 			resync(quiet)
 		}
-		if _, _, err := refreshDigests(ctx, quiet, baseDir, pin, nil); err != nil {
+		if _, _, err := refreshDigests(ctx, quiet, baseDir, pin, nil, owned); err != nil {
 			return false, err.Error()
 		}
 		if cfg.AfterPatch != "" {
