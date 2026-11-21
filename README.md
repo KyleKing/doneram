@@ -289,6 +289,16 @@ in this table wins.
 vulnerable pin that doneram could fix is patched and passes, while one held
 below its fix by a ceiling fails the job.
 
+
+Library majors (PyPI, npm, cargo) are graded the same three ways from
+their own release notes: doneram finds the source repository in the
+registry's metadata, reads the GitHub release of each major crossed (or the
+CHANGELOG section for it), and picks out the lines announcing a breaking
+change. A backticked name in one of those lines that this repo's code
+uses makes it *breaking*, with the name cited; breaking lines that touch
+nothing here make it *review*; notes that announce nothing breaking make
+it *safe*. Unreadable notes are *review*, never safe.
+
 ## Update policy
 
 Three controls decide whether a newer version is offered, each settable per
@@ -384,6 +394,18 @@ golang.org/x/net@v0.23.0`, ...). doneram never resolves a graph itself; a
 package manager that is not installed leaves the command in the report to
 run by hand. Findings count toward `--fail-on-vuln`, and `lockfiles =
 false` turns the scan off.
+
+### Provenance
+
+For npm and PyPI pins, doneram compares how the proposed release was
+published with how the current one was: npm's SLSA provenance in the
+registry and PyPI's PEP 740 attestations both name the source repository
+and workflow that built a release. A release that lost the attestation its
+predecessor had, was built from a different repository, or (npm, with no
+attestation either side) was pushed by a different account goes to a
+`review-<tool>` PR of its own with the evidence, even when it fixes an
+advisory: a rushed "fix" from a hijacked account is exactly what this
+catches.
 
 ### Dependabot alerts for every pin
 

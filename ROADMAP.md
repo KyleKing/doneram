@@ -149,10 +149,10 @@ owns a file does the resolving.
 5. **Declared-constraint bump plus relock.** Raise `pyproject.toml` and
    `package.json` constraints, then run `uv lock` / `npm install
    --package-lock-only` (the uv#6794 gap).
-6. **Provenance.** Verify npm and PyPI attestations and GitHub release
+6. **Provenance. Shipped.** Verify npm and PyPI attestations and GitHub release
    attestations; flag a new version that lost provenance or changed
    publisher, before it is proposed.
-7. **Changelog risk beyond actions.** Extend the safe/review/breaking grade
+7. **Changelog risk beyond actions. Shipped.** Extend the safe/review/breaking grade
    to PyPI, npm, and cargo majors by mining release notes and changelogs.
 8. **Fleet CLI.** Run across many repos (an org, or a list) from one
    process, locally on demand or hosted on a schedule, and render one view

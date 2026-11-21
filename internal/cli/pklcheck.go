@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kyleking/doneram/internal/actionrisk"
+	"github.com/kyleking/doneram/internal/changelog"
 	"github.com/kyleking/doneram/internal/config"
 	"github.com/kyleking/doneram/internal/discover"
 	"github.com/kyleking/doneram/internal/engine"
@@ -24,6 +25,7 @@ import (
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/osv"
+	"github.com/kyleking/doneram/internal/provenance"
 	"github.com/kyleking/doneram/internal/resolver"
 	"github.com/kyleking/doneram/internal/vulncheck"
 	"github.com/kyleking/doneram/internal/vulnscan"
@@ -92,9 +94,13 @@ type pklSiteSummary struct {
 	// Risk grades a major action bump against how the workflow uses it:
 	// "safe", "review", or "breaking". Empty when there is no major bump
 	// to judge.
-	Risk      string         `json:"risk,omitempty"`
-	RiskNotes []string       `json:"riskNotes,omitempty"`
-	EOL       *pklEOLSummary `json:"eol,omitempty"`
+	Risk string `json:"risk,omitempty"`
+	// Provenance says how the proposed release's build story differs from
+	// the current one's; set, it sends the bump to a review PR even when it
+	// fixes an advisory, since a rushed "fix" is how a hijack ships.
+	Provenance string         `json:"provenance,omitempty"`
+	RiskNotes  []string       `json:"riskNotes,omitempty"`
+	EOL        *pklEOLSummary `json:"eol,omitempty"`
 }
 
 // pklEOLSummary is the end-of-life date of the cycle a site's current pin
@@ -271,6 +277,8 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	vulnResults := vulncheck.Check(ctx, results, osvClient, scanner)
 	security := applySecurityFixes(ctx, results, vulnResults, lookup)
 	risks := assessRisks(ctx, results, actionrisk.New(httpClient))
+	assessLibraryRisks(ctx, results, risks, changelog.New(httpClient), baseDir)
+	provenanceNotes := checkProvenance(ctx, results, provenance.New(httpClient))
 
 	eolClient := run.eol
 	if eolClient == nil {
@@ -327,6 +335,12 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		siteSummary.WaivedMinAge = security[i].Waived
 		siteSummary.Risk = string(risks[i].Level)
 		siteSummary.RiskNotes = risks[i].Notes
+		if note := provenanceNotes[i]; note != "" {
+			siteSummary.Provenance = note
+			if repeats >= 0 {
+				out.printf("    ⚠ provenance: %s\n", note)
+			}
+		}
 		if repeats >= 0 {
 			reportSecurity(out, vuln, security[i])
 			reportRisk(out, risks[i])
@@ -827,6 +841,8 @@ func finishSummary(summary *pklSummary) {
 	var security, review, routine []pklSiteSummary
 	for _, r := range rows {
 		switch {
+		case r.Provenance != "":
+			review = append(review, r)
 		case r.Security:
 			security = append(security, r)
 		case r.Risk == string(actionrisk.Breaking) || r.Risk == string(actionrisk.Review):
@@ -851,7 +867,7 @@ func finishSummary(summary *pklSummary) {
 	body.WriteString("Automated pin updates from doneram.\n")
 	writeSection(&body, "Security fixes", "Each moves a pin with a published advisory to a release that clears it. "+
 		"Rows marked *ahead of --min-age* take the minimum fixed release before the cooldown would have offered it.", security)
-	writeSection(&body, "Needs review", "Major action bumps that change something this repo's workflows use.", review)
+	writeSection(&body, "Needs review", "Majors whose release notes or interface change touch something this repo uses, and releases whose provenance changed.", review)
 	writeLockSection(&body, summary.Lockfiles)
 	writeHardenSection(&body, summary.Hardened)
 	writeLifecycleSection(&body, summary.Lifecycle)
@@ -864,6 +880,9 @@ func finishSummary(summary *pklSummary) {
 func mergeRow(row, s pklSiteSummary) pklSiteSummary {
 	row.Security = row.Security || s.Security
 	row.WaivedMinAge = row.WaivedMinAge || s.WaivedMinAge
+	if row.Provenance == "" {
+		row.Provenance = s.Provenance
+	}
 	if riskRank(s.Risk) > riskRank(row.Risk) {
 		row.Risk = s.Risk
 	}
@@ -924,6 +943,9 @@ func writeSection(body *strings.Builder, title, intro string, rows []pklSiteSumm
 
 func rowNote(r pklSiteSummary) string {
 	var parts []string
+	if r.Provenance != "" {
+		parts = append(parts, "**provenance changed:** "+r.Provenance)
+	}
 	if r.Security {
 		ids := make([]string, 0, len(r.Vulnerabilities))
 		for _, v := range r.Vulnerabilities {

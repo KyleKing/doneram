@@ -157,3 +157,14 @@ func TestBuildGroupsReview(t *testing.T) {
 		t.Errorf("branch = %s", summary.Groups[1].Branch)
 	}
 }
+
+func TestBuildGroupsProvenance(t *testing.T) {
+	summary := pklSummary{Results: []pklSiteSummary{
+		{Tool: "left-pad", Current: "1.0.0", Latest: "1.0.1", Security: true, Provenance: "left-pad 1.0.1 has no build attestation", needsUpdate: true},
+		{Tool: "jq", Current: "1.7.0", Latest: "1.7.1", needsUpdate: true},
+	}}
+	buildGroups(&summary, nil)
+	if len(summary.Groups) != 2 || summary.Groups[1].ID != "review-left-pad" || !strings.Contains(summary.Groups[1].Body, "provenance changed") {
+		t.Errorf("groups = %+v", summary.Groups)
+	}
+}

@@ -51,7 +51,7 @@ func buildGroups(summary *pklSummary, offenders map[string]string) {
 			seen[s.Tool] = true
 			order = append(order, s.Tool)
 		}
-		if !s.Security && (s.Risk == string(actionrisk.Review) || s.Risk == string(actionrisk.Breaking)) {
+		if s.Provenance != "" || (!s.Security && (s.Risk == string(actionrisk.Review) || s.Risk == string(actionrisk.Breaking))) {
 			review[s.Tool] = true
 		}
 	}
