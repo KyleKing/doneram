@@ -398,6 +398,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 
 		siteSummary := summarizeSite(result, vuln)
+		siteSummary.Compare = tagLink(ctx, result.Site, siteSummary.Current, siteSummary.Latest, lookup)
 		siteSummary.Security = security[i].Fixes
 		siteSummary.WaivedMinAge = security[i].Waived
 		siteSummary.Risk = string(risks[i].Level)
@@ -830,7 +831,6 @@ func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSumma
 	if len(result.Matches) > 0 {
 		s.Current = result.Matches[0].Value
 	}
-	s.Compare = compareLink(result.Site, s.Current, s.Latest)
 	if result.Err != nil {
 		s.Error = result.Err.Error()
 	}

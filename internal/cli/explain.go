@@ -20,6 +20,7 @@ import (
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/provenance"
+	"github.com/kyleking/doneram/internal/resolver"
 )
 
 // newExplainCommand prints the context needed to finish one bump on the
@@ -124,7 +125,9 @@ func runExplain(ctx context.Context, w io.Writer, dir, tool, base string, valida
 		fmt.Fprintf(&b, "No change against `%s`: %s is `%s` on both. `doneram check --only %s` shows whether a newer release exists.\n", ref.name, tool, to, tool)
 	default:
 		fmt.Fprintf(&b, "This branch moves %s from `%s` to `%s` (against `%s`).\n", tool, from, to, ref.name)
-		if link := compareLink(results[0].Site, from, to); link != "" {
+		registry := resolver.Registry(httpclient.New(httpclient.DefaultConfig()))
+		lookup := func(kind string) (resolver.Resolver, bool) { r, ok := registry[kind]; return r, ok }
+		if link := tagLink(ctx, results[0].Site, from, to, lookup); link != "" {
 			fmt.Fprintf(&b, "\nCompare: %s\n", link)
 		}
 	}

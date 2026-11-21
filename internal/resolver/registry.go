@@ -6,9 +6,12 @@ import "net/http"
 // by the name a locator's Resolver field names. A kind absent from this map
 // is not implemented yet; callers report that rather than crashing.
 func Registry(client *http.Client) map[string]Resolver {
+	npm, pypi, github := NewNPMResolver(client), NewPyPIResolver(client), NewGitHubReleaseResolver(client)
+	mise := NewMiseResolver()
+	mise.GitHub, mise.NPM, mise.PyPI = github, npm, pypi
 	return map[string]Resolver{
-		"npm":            NewNPMResolver(client),
-		"pypi":           NewPyPIResolver(client),
+		"npm":            npm,
+		"pypi":           pypi,
 		"cargo":          NewCargoResolver(client),
 		"composer":       NewComposerResolver(client),
 		"rubygems":       NewRubyGemsResolver(client),
@@ -18,8 +21,8 @@ func Registry(client *http.Client) map[string]Resolver {
 		"docker":         NewDockerHubResolver(client),
 		"dockerhub":      NewDockerHubResolver(client),
 		"ghcr":           NewGHCRResolver(client),
-		"mise":           NewMiseResolver(),
-		"github-release": NewGitHubReleaseResolver(client),
+		"mise":           mise,
+		"github-release": github,
 		"github-branch":  NewGitHubBranchResolver(client),
 		"github-action":  NewGitHubActionResolver(client),
 		"cdnjs":          NewCDNJSResolver(client),

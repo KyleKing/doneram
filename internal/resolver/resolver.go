@@ -7,6 +7,13 @@ import (
 	"github.com/kyleking/doneram/internal/support"
 )
 
+// Tagger is implemented by a Resolver whose versions come from git tags,
+// to name the exact tag a version was released under ("v1.2.3" or
+// "1.2.3"), which a compare link needs.
+type Tagger interface {
+	Tag(ctx context.Context, pkg, version string) (string, error)
+}
+
 // Historian is implemented by a Resolver that can list a package's
 // releases with their publish dates, which is what inferring an end of
 // life from release history needs.

@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/locator"
+	"github.com/kyleking/doneram/internal/resolver"
 )
 
 func TestCompareLink(t *testing.T) {
@@ -32,5 +34,30 @@ func TestCompareLink(t *testing.T) {
 	}
 	if got := compareLink(action, "abc # v4.2.2", "abc # v4.2.2"); got != "" {
 		t.Errorf("unchanged pin link = %q, want none", got)
+	}
+}
+
+type stubTagger struct {
+	fixedResolver
+	tags map[string]string
+}
+
+func (s stubTagger) Tag(_ context.Context, _, version string) (string, error) {
+	return s.tags[version], nil
+}
+
+func TestTagLinkUsesRealTags(t *testing.T) {
+	site := engine.Site{ResolverName: "acme/tool", Locator: locator.Locator{Resolver: "github-release"}}
+	lookup := func(tags map[string]string) func(string) (resolver.Resolver, bool) {
+		return func(string) (resolver.Resolver, bool) { return stubTagger{tags: tags}, true }
+	}
+	if got := tagLink(context.Background(), site, "1.2.0", "1.3.0", lookup(map[string]string{"1.2.0": "v1.2.0", "1.3.0": "v1.3.0"})); got != "https://github.com/acme/tool/compare/v1.2.0...v1.3.0" {
+		t.Errorf("v-tagged = %q", got)
+	}
+	if got := tagLink(context.Background(), site, "1.2.0", "1.3.0", lookup(map[string]string{"1.2.0": "1.2.0", "1.3.0": "1.3.0"})); got != "https://github.com/acme/tool/compare/1.2.0...1.3.0" {
+		t.Errorf("bare-tagged = %q", got)
+	}
+	if got := tagLink(context.Background(), site, "1.2.0", "1.3.0", lookup(map[string]string{"1.3.0": "v1.3.0"})); got != "" {
+		t.Errorf("untagged version linked: %q", got)
 	}
 }
