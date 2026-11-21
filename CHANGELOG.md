@@ -1,3 +1,9 @@
+## v0.16.0 (2026-11-21)
+
+### Feat
+
+- grade library majors by their release notes and check provenance (#12)
+
 ## v0.15.0 (2026-11-21)
 
 ### Feat
