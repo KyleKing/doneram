@@ -1,3 +1,9 @@
+## v2.0.2 (2026-11-21)
+
+### Fix
+
+- link compares through real tags, and finish cooldown and history coverage (#22)
+
 ## v2.0.1 (2026-11-21)
 
 ### Fix
