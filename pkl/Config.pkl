@@ -82,4 +82,15 @@ class Tool {
 /// Runs after a successful patch, from the directory holding the config.
 afterPatch: String?
 
+/// Also check the pins doneram finds without being told: SHA-pinned
+/// `uses:` lines (`owner/repo@<sha> # v1.2.3`) in workflows and composite
+/// actions, and plain versions under mise.toml `[tools]` or in
+/// .tool-versions. A pin a `tools` entry already covers is never checked
+/// twice.
+discover: Boolean = true
+
+/// Discovered tools to leave unchecked, by the name the report shows
+/// (`"actions/checkout"`, `"node"`).
+ignore: Listing<String> = new {}
+
 tools: Mapping<String, Tool>

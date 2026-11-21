@@ -87,9 +87,29 @@ past it.
 Held pins appear in the report with their reason, so a hold added for a
 temporary problem can't rot silently.
 
+## Discovery
+
+Most pins need no config. doneram finds and checks these on its own:
+
+- SHA-pinned actions written as `uses: owner/repo@<sha> # v1.2.3` in
+  `.github/workflows/`, `.github/actions/*/action.yml`, and a root
+  `action.yml`. A SHA without its version comment, and a mutable tag pin,
+  are left alone.
+- Plain versions under `[tools]` in `mise.toml`, and in `.tool-versions`.
+  `latest`, `lts`, and arrays are not pins and are skipped.
+
+A repo with neither a `.doneram.pkl` nor a `Dockerfile` runs on discovery
+alone. With a config, discovered pins join the declared ones, and any pin a
+`tools` entry already matches is never checked twice. Set `discover =
+false` to turn discovery off, or list tools to skip by their report name:
+
+```pkl
+ignore = new { "actions/checkout"; "node" }
+```
+
 ## Config
 
-A repo with pins outside Dockerfiles declares them in `.doneram.pkl`. Each
+A repo with pins that discovery cannot find declares them in `.doneram.pkl`. Each
 tool names a resolver and the sites where its version appears as a literal.
 doneram patches every site together, so a version pinned in three files
 cannot end up disagreeing with itself.
@@ -170,7 +190,7 @@ doneram says so, because tracking a tag beats tracking a moving branch.
 ## CLI
 
 ```bash
-# Check the repo config, or ./Dockerfile if there is none
+# Check the repo config plus discovered pins, or ./Dockerfile if there is no config
 doneram check
 
 doneram check -f docker/api/Dockerfile
@@ -193,6 +213,28 @@ the summary to stdout and nothing else, which is what a script should read.
 `--fail-on-drift` makes it an exit code too, for a CI job that should go red
 rather than open a pull request.
 
+A pin keeps the precision it was written with: `version: v2.12` moves to
+`v2.15`, not `v2.15.0`, because a floating minor was chosen on purpose.
+
+### Major action bumps
+
+A major version is not risky in itself, so doneram judges each major action
+bump against how the repo actually uses the action. It reads the action's
+`action.yml` at both tags and compares it with each step's `with:` keys and
+every `steps.<id>.outputs.*` the workflow reads:
+
+- **breaking**: an input the step sets was removed, an input became
+  required and the step does not set it, or an output the workflow reads
+  was removed.
+- **review**: a default the step relies on changed, or an input it sets was
+  deprecated.
+- **safe**: nothing the step uses changed. Runtime moves (`node20` →
+  `node24`) and lines the release notes flag as breaking are still listed
+  for context.
+
+Breaking and review bumps get their own *Needs review* section in the pull
+request, so routine updates stay a quick read.
+
 Drift is the only soft outcome. A site that fails to resolve, matches the
 wrong number of times, or fails to patch exits non-zero,
 because a pin nobody checked looks exactly like a pin that is current.
@@ -213,9 +255,16 @@ land, or raise it where a bad version would be expensive.
 
 The cooldown applies where the registry publishes a release date, which
 today means GitHub Releases. A project that only cuts tags has no date to
-read, so its pins are offered as soon as the tag appears. A cooldown never
-hides an advisory: a vulnerable pin is still reported with the minimum
-version that clears it, even when that version is younger than the window.
+read, so its pins are offered as soon as the tag appears. When the newest
+release outside the window is older than the pin itself, the pin is kept and
+reported as behind, never patched backwards.
+
+A **security fix waives the cooldown**. When a pin has a published advisory
+and the normal update is held by `--min-age`, or does not reach the fix,
+doneram moves the pin to the minimum release that clears every advisory, and
+the pull request lists it under *Security fixes*, marked *ahead of
+--min-age*. Only the smallest fixing release is taken early; the rest of the
+cooldown still applies to everything newer.
 
 **Yanked versions** are checked both ways. doneram never proposes one, and
 reports a currently-pinned version that has since been yanked, because that
@@ -240,10 +289,11 @@ shells out to trivy or grype, which read the image layers statically rather
 than running the container.
 
 A vulnerable pin reports two candidates, labeled: the minimum patched
-version, and the latest version matching the pin's own pattern. The release
-age is not yet waived for a fix, so a cooldown can delay a security release
-it does not hide — the advisory and the version that clears it are reported
-either way.
+version, and the latest version matching the pin's own pattern. If the
+normal update clears the advisories it is taken as usual; otherwise the
+minimum patched version is, ahead of the cooldown (see Update policy).
+SHA-pinned actions are covered through OSV's GitHub Actions ecosystem, and a
+fix for one is resolved back to its commit SHA before it is written.
 
 A hold is never overridden. When the only fix sits above the ceiling, the
 report says held, vulnerable, and no fix underneath it, and leaves the call

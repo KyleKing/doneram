@@ -27,8 +27,9 @@ type Finding struct {
 // patched version a vulnerable pin reports alongside its normal Latest
 // candidate. The zero Result means nothing was found.
 //
-// TODO(M6): a version that clears an advisory should waive the --min-age
-// cooldown; the patched version is not yet fed back into the patch decision.
+// The CLI feeds PatchedVersion back into the patch decision: a vulnerable
+// pin whose normal update is held by --min-age (or does not reach the fix)
+// moves to the minimum patched version instead.
 type Result struct {
 	Findings       []Finding
 	PatchedVersion string
@@ -154,7 +155,9 @@ func checkOSV(ctx context.Context, results []engine.SiteResult, osvClient *osv.C
 }
 
 func buildOSVResult(r engine.SiteResult, advisories []osv.Advisory) Result {
-	current := r.Matches[0].Value
+	// A github-action pin is "<sha> # v4.3.0"; only the tag orders against
+	// the advisory's fixed versions.
+	current := queryVersion(r.Site, r.Matches[0].Value)
 	pkg := packageName(r.Site)
 
 	findings := make([]Finding, len(advisories))

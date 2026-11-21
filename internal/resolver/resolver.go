@@ -18,3 +18,11 @@ type Resolver interface {
 type Detailer interface {
 	Detail(ctx context.Context, pkg string, current, latest string) (string, error)
 }
+
+// Pinner is implemented by a Resolver whose pin value is not the bare
+// version string, e.g. a github-action pin that writes "<sha> # v4.3.0".
+// Pin turns a specific version (typically the minimum release clearing an
+// advisory) into the value the site's capture group should hold.
+type Pinner interface {
+	Pin(ctx context.Context, pkg, version string) (string, error)
+}

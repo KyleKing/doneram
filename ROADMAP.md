@@ -97,14 +97,13 @@ sits inside the window offers nothing rather than falling through to
 `/tags`, which would hand back the release just held. When the newest
 release outside the window predates the pin itself, which happens the week
 a repo adopts its own fresh release, the pin is kept and reported as
-behind rather than patched backwards. The security
-exemption is not
-implemented: a cooldown can currently delay a fix as well as a bad release.
-It does not hide one, because the advisory and the minimum version that
-clears it are reported either way, but a vulnerable pin still has to be
-taken by hand. Wiring the exemption means feeding vulncheck's patched
-version back into the patch decision, which for a github-action pin needs
-the tag resolved back to a SHA before it can be written to a file.
+behind rather than patched backwards.
+
+The security exemption shipped: a vulnerable pin whose normal update is held
+by the cooldown, or stops short of the fix, moves to the minimum release
+that clears its advisories, and the PR lists it under *Security fixes*
+marked as ahead of --min-age. A github-action fix is resolved from its tag
+back to a SHA through `resolver.Pinner`. A hold is never crossed for it.
 
 **Yanked versions.** doneram checks yank status both ways: never propose a
 yanked version, and flag a currently-pinned version that has since been
@@ -174,14 +173,18 @@ remains:
 - `check --apply` and `update` do the same thing on the config path
 - Every unresolved site and every count mismatch collapses into one exit
   code, so a workflow cannot tell one kind of breakage from another
-- `go test ./...` fails on a machine without a running Docker daemon:
-  `TestDockerQuerier_QueryPackages` guards on `testing.Short()` only. Gate
-  on daemon reachability or make `mise run test` pass `-short`
 - `internal/builder` holds its coverage near 30% because Build, Validate,
   and Cleanup shell out to `docker` with no seam. A command-runner
   interface would let the gate rise
 - `go` is not pinned in `mise.toml`, so a local toolchain can drift from
-  the `go.mod` version CI builds against
+  the `go.mod` version CI builds against. CI and every workflow now read
+  `go-version-file: go.mod`, so the weekly gomod step is the only owner
+
+Shipped since: discovery of SHA-pinned actions and mise tools with no
+config, pins keeping the precision they were written with (`v2.12` moves to
+`v2.15`), one PR row per distinct move rather than per site, and a major
+action bump graded safe, review, or breaking against how the workflow uses
+the action's inputs and outputs.
 
 Done when every pin in the fleet is eligible for an advisory lookup.
 

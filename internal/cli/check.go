@@ -90,6 +90,18 @@ func runCheck(ctx context.Context, cmd *cli.Command) error {
 		if path := cmd.String("config"); path != "" {
 			return fmt.Errorf("reading %s: no such config", path)
 		}
+		// With no config and no Dockerfile, check what discovery finds:
+		// SHA-pinned actions and mise tools need no config at all.
+		if !fileExists("Dockerfile") {
+			return runCheckPkl(ctx, pklRun{
+				apply:       cmd.Bool("apply"),
+				output:      cmd.String("output"),
+				workers:     int(cmd.Int("workers")),
+				only:        cmd.StringSlice("only"),
+				format:      format,
+				failOnDrift: cmd.Bool("fail-on-drift"),
+			})
+		}
 	}
 
 	// Expand file patterns

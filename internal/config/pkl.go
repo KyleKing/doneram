@@ -58,6 +58,18 @@ type Tool struct {
 type Config struct {
 	AfterPatch string          `json:"afterPatch"`
 	Tools      map[string]Tool `json:"tools"`
+	// Discover adds the pins doneram finds on its own (SHA-pinned actions,
+	// mise tools) to the ones Tools declares. Nil, as in a config written
+	// before the field existed, means on.
+	Discover *bool `json:"discover"`
+	// Ignore names discovered tools to leave unchecked, e.g.
+	// "actions/checkout" or a mise tool name.
+	Ignore []string `json:"ignore"`
+}
+
+// DiscoverEnabled reports whether discovered pins join the declared ones.
+func (c *Config) DiscoverEnabled() bool {
+	return c.Discover == nil || *c.Discover
 }
 
 // Load shells out to `pkl eval -f json` and parses the result.
