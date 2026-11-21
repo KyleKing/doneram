@@ -1,3 +1,9 @@
+## v0.11.0 (2026-11-21)
+
+### Feat
+
+- scan lockfiles for vulnerable transitive dependencies (#7)
+
 ## v0.10.0 (2026-11-21)
 
 ### Feat
