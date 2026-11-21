@@ -84,14 +84,21 @@ func resolverKind(imageName string) string {
 	return "docker"
 }
 
-var imageRefRegex = regexp.MustCompile(`^([^:]+):(.+)$`)
-
 func parseImageRef(args string) (string, string) {
-	matches := imageRefRegex.FindStringSubmatch(stripAlias(args))
-	if matches == nil {
+	return SplitImageRef(stripAlias(args))
+}
+
+// SplitImageRef splits "name:tag" into name and tag, dropping a pinned
+// "@sha256:..." digest, which belongs to the tag rather than being part of
+// it, and keeping a registry port ("reg:5000/x:1") in the name. It returns
+// empty strings for a reference with no tag.
+func SplitImageRef(image string) (string, string) {
+	image, _, _ = strings.Cut(strings.TrimSpace(image), "@")
+	colon := strings.LastIndex(image, ":")
+	if colon <= 0 || colon < strings.LastIndex(image, "/") || colon == len(image)-1 {
 		return "", ""
 	}
-	return matches[1], matches[2]
+	return image[:colon], image[colon+1:]
 }
 
 var copyFromRefRegex = regexp.MustCompile(`--from=([^\s]+)`)

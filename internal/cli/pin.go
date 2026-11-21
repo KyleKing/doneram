@@ -11,6 +11,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/kyleking/doneram/internal/digest"
 	"github.com/kyleking/doneram/internal/harden"
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/resolver"
@@ -56,9 +57,19 @@ func newPinCommand() *cli.Command {
 	}
 }
 
-// pinResolver pins actions through the GitHub API and tools through mise.
+// pinResolver pins actions through the GitHub API, tools through mise, and
+// images through their registry.
 type pinResolver struct {
 	actions *resolver.GitHubActionResolver
+	images  *digest.Client
+}
+
+func (p pinResolver) ImageDigest(ctx context.Context, image string) (string, error) {
+	ref, err := digest.Parse(image)
+	if err != nil {
+		return "", err
+	}
+	return p.images.Resolve(ctx, ref)
 }
 
 func (p pinResolver) PinAction(ctx context.Context, repo, ref string) (string, error) {
@@ -78,7 +89,7 @@ func (p pinResolver) PinTool(ctx context.Context, tool, ref string) (string, err
 }
 
 func defaultPinResolver(client *http.Client) harden.Resolver {
-	return pinResolver{actions: resolver.NewGitHubActionResolver(client)}
+	return pinResolver{actions: resolver.NewGitHubActionResolver(client), images: digest.New(client)}
 }
 
 // hardenRepo scans baseDir for floating references and, with apply, pins
@@ -104,6 +115,41 @@ func hardenRepo(ctx context.Context, out report, baseDir string, apply bool, r h
 	}
 
 	out.printf("\nFloating references:\n")
+	summaries, failures := summarizeHardening(out, baseDir, findings, failures)
+	return summaries, failures, nil
+}
+
+// refreshDigests re-resolves every image pinned as tag@digest and rewrites
+// the ones whose tag now points elsewhere: a tag this run moved, or one
+// rebuilt upstream with the same name, which is how a base image ships its
+// OS security patches.
+func refreshDigests(ctx context.Context, out report, baseDir string, r harden.Resolver) ([]pklHardenSummary, int, error) {
+	findings, err := harden.ScanDigests(baseDir)
+	if err != nil || len(findings) == 0 {
+		return nil, 0, err
+	}
+	if r == nil {
+		r = defaultPinResolver(httpclient.New(httpclient.DefaultConfig()))
+	}
+	harden.Resolve(ctx, findings, r)
+	if _, err := harden.Apply(findings); err != nil {
+		return nil, 0, err
+	}
+	var changed []harden.Finding
+	for _, f := range findings {
+		if f.Err != nil || f.Replacement != "" {
+			changed = append(changed, f)
+		}
+	}
+	if len(changed) == 0 {
+		return nil, 0, nil
+	}
+	out.printf("\nImage digests:\n")
+	summaries, failures := summarizeHardening(out, baseDir, changed, 0)
+	return summaries, failures, nil
+}
+
+func summarizeHardening(out report, baseDir string, findings []harden.Finding, failures int) ([]pklHardenSummary, int) {
 	summaries := make([]pklHardenSummary, len(findings))
 	for i, f := range findings {
 		rel, err := filepath.Rel(baseDir, f.File)
@@ -115,16 +161,16 @@ func hardenRepo(ctx context.Context, out report, baseDir string, apply bool, r h
 		case f.Err != nil:
 			s.Error = f.Err.Error()
 			failures++
-			out.printf("✗ %s:%d %s@%s: %v\n", s.File, s.Line, f.Name, f.Ref, f.Err)
+			out.printf("✗ %s:%d %s: %v\n", s.File, s.Line, label(f), f.Err)
 		case f.Replacement != "":
 			s.Pinned, s.Updated = f.Replacement, true
-			out.printf("  pinned %s@%s → %s (%s:%d)\n", f.Name, f.Ref, f.Replacement, s.File, s.Line)
+			out.printf("  pinned %s → %s (%s:%d)\n", label(f), f.Replacement, s.File, s.Line)
 		default:
-			out.printf("⚠ %s:%d %s@%s floats; `doneram pin` pins it\n", s.File, s.Line, f.Name, f.Ref)
+			out.printf("⚠ %s:%d %s floats; `doneram pin` pins it\n", s.File, s.Line, label(f))
 		}
 		summaries[i] = s
 	}
-	return summaries, failures, nil
+	return summaries, failures
 }
 
 func writeHardenSection(body *strings.Builder, items []pklHardenSummary) {
@@ -142,6 +188,40 @@ func writeHardenSection(body *strings.Builder, items []pklHardenSummary) {
 	body.WriteString("| Reference | Was | Pinned | Where |\n")
 	body.WriteString("| --- | --- | --- | --- |\n")
 	for _, r := range rows {
-		fmt.Fprintf(body, "| `%s` | `%s` | `%s` | `%s:%d` |\n", r.Name, r.Ref, r.Pinned, r.File, r.Line)
+		was, pinned := r.Ref, r.Pinned
+		switch r.Kind {
+		case string(harden.Image):
+			was = "tag only"
+		case string(harden.Digest):
+			was = shortDigest(was) + " (rebuilt or retagged)"
+		}
+		if r.Kind == string(harden.Image) || r.Kind == string(harden.Digest) {
+			pinned = shortDigest(pinned)
+		}
+		fmt.Fprintf(body, "| `%s` | %s | `%s` | `%s:%d` |\n", r.Name, code(was), pinned, r.File, r.Line)
 	}
+}
+
+func shortDigest(d string) string {
+	algo, hex, ok := strings.Cut(d, ":")
+	if !ok || len(hex) < 12 {
+		return d
+	}
+	return algo + ":" + hex[:12]
+}
+
+func code(s string) string {
+	if strings.HasSuffix(s, ")") || s == "tag only" {
+		return s
+	}
+	return "`" + s + "`"
+}
+
+// label names a finding as it reads in the file: an action or tool with its
+// ref, an image by its tag (which already carries the ref).
+func label(f harden.Finding) string {
+	if f.Kind == harden.Image || f.Kind == harden.Digest {
+		return f.Name
+	}
+	return f.Name + "@" + f.Ref
 }

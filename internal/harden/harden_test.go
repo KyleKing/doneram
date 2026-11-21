@@ -27,6 +27,11 @@ func (f *fakeResolver) PinTool(_ context.Context, tool, ref string) (string, err
 	return "22.11.0", nil
 }
 
+func (f *fakeResolver) ImageDigest(_ context.Context, image string) (string, error) {
+	f.calls++
+	return "sha256:" + strings.Repeat("d", 64), nil
+}
+
 func write(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)

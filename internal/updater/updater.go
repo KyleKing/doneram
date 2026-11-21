@@ -113,7 +113,6 @@ func UpdateFromInstructions(instructions []parser.Instruction, directives map[in
 	return updates
 }
 
-var imageRegex = regexp.MustCompile(`^([^:]+):(.+)$`)
 var copyFromRegex = regexp.MustCompile(`--from=([^\s]+)`)
 
 func parseFromInstruction(args string) (string, string) {
@@ -126,11 +125,7 @@ func parseFromInstruction(args string) (string, string) {
 		image = image[:idx]
 	}
 
-	matches := imageRegex.FindStringSubmatch(strings.TrimSpace(image))
-	if matches == nil {
-		return "", ""
-	}
-	return matches[1], matches[2]
+	return parser.SplitImageRef(image)
 }
 
 func parseCopyFromInstruction(args string) (string, string) {
@@ -139,10 +134,5 @@ func parseCopyFromInstruction(args string) (string, string) {
 		return "", ""
 	}
 
-	image := matches[1]
-	imageMatches := imageRegex.FindStringSubmatch(image)
-	if imageMatches == nil {
-		return "", ""
-	}
-	return imageMatches[1], imageMatches[2]
+	return parser.SplitImageRef(matches[1])
 }

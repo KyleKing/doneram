@@ -127,12 +127,13 @@ owns a file does the resolving.
    vulnerable one through the lockfile's own package manager. Building it
    surfaced that the minimum fix only cleared the first advisory a pin had,
    not all of them, which is fixed for pins too.
-2. **Pin hardening.** Actions and mise shipped: `doneram pin` (and
-   `update`, before it checks) turns `@v4` into `<sha> # v4.2.2`, naming
-   the exact release the floating tag points at, and a mise prefix or
-   `latest` into the version mise resolves; `--fail-on-unpinned` gates it.
-   Next: Docker `FROM` and compose tags pinned as `tag@sha256:`, with
-   updates that refresh the digest when the tag moves or is rebuilt.
+2. **Pin hardening. Shipped.** `doneram pin` (and `update`, before it
+   checks) turns `@v4` into `<sha> # v4.2.2`, naming the exact release the
+   floating tag points at, a mise prefix or `latest` into the version mise
+   resolves, and a Dockerfile or compose image tag into `tag@sha256:`.
+   `update` re-resolves every digest after patching, so a moved tag never
+   keeps a stale digest and a same-tag rebuild arrives as a PR row.
+   `--fail-on-unpinned` gates it.
 3. **EOL runtimes with no config.** Discovered tools (python, node, go,
    ruby, java, terraform, postgres images) get their endoflife.date product
    assigned automatically, so a runtime past end-of-life is flagged and its
