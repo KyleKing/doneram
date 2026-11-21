@@ -695,6 +695,32 @@ Validation is optional per tool. A bumped CDN URL or Action SHA has nothing
 to build, and doneram reports those as updated but unvalidated rather than
 pretending otherwise.
 
+## Finishing a bump with an agent
+
+doneram stops where a deterministic tool has to: a `failing-<tool>` PR whose
+bump breaks validation, or a `review-<tool>` PR for a major or a changed
+build provenance. `doneram explain <tool>` prints what finishing one needs,
+on that PR's branch: the version change against the base branch, every
+place it is pinned, the release notes' breaking changes that name something
+this repo uses, any provenance warning, and (with `--validate`) the
+validate output. It only reads, and it works for a person as well as an
+agent.
+
+Two agent skills drive the rest, in the `.agents/skills` layout that
+coding agents share (Claude Code reads them through the `.claude/skills`
+symlink):
+
+- [`doneram-fix-bump`](.agents/skills/doneram-fix-bump/SKILL.md) runs
+  `explain`, adapts the code to the new version, and loops on `validate`
+  until it passes. It stops instead of editing on a provenance warning, and
+  never skips a test to get green.
+- [`copier-update-conflicts`](.agents/skills/copier-update-conflicts/SKILL.md)
+  resolves the `.rej` files and conflict markers a template update leaves,
+  and lists local changes worth backporting to the template.
+
+Copy `.agents/skills/` into a repo (or a template, so every generated
+project gets it) to use them there.
+
 ## License
 
 MIT
