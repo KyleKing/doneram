@@ -395,6 +395,43 @@ package manager that is not installed leaves the command in the report to
 run by hand. Findings count toward `--fail-on-vuln`, and `lockfiles =
 false` turns the scan off.
 
+### Declared ranges
+
+A lockfile moves inside the ranges a manifest declares, and the floors of
+those ranges rot: `requests>=2.20` still claims to work with a release
+nobody has tested against in years. `update` keeps them in step for every
+project that pairs a manifest with its lock: `pyproject.toml` with
+`uv.lock`, `package.json` with `package-lock.json` or `pnpm-lock.yaml`,
+and `go.mod`.
+
+1. The package manager upgrades the lock within the declared ranges (`uv
+   lock --upgrade`, `npm update --package-lock-only`, `pnpm update
+   --lockfile-only`, `go get -u ./...` then `go mod tidy`). When a Go
+   module needs a newer toolchain, `go get go@X` raises the `go` directive
+   and the upgrade is retried once.
+2. Each declared floor is raised to the version now locked: `>=X` in
+   `[project] dependencies`, `[project.optional-dependencies]`, and
+   `[dependency-groups]`, and `^X`, `~X`, `>=X`, or an exact `X` in
+   `dependencies`, `devDependencies`, and `optionalDependencies`. Files are
+   edited in place, so extras, markers, other clauses, comments, and
+   formatting stay as written, and a floor is never lowered. Tags, URLs,
+   `workspace:`, `file:`, `npm:` aliases, and compound ranges are left
+   alone. Go needs no such step, since a `require` is already a floor.
+3. The lock is relocked against the raised floors (`uv lock`, `npm install
+   --package-lock-only --ignore-scripts`, `pnpm install --lockfile-only
+   --ignore-scripts`).
+
+These ride in the `updates` PR under *Raised declared floors*, and in
+every `validate` trial. A project whose package manager is not installed
+is skipped with the command to run.
+
+A new major outside a declared range (a `<3` cap, or a `^`/`~` spec) is
+never taken silently. `check` and `update` report it as a review bump of the
+range itself, `requests` `>=2.31,<3` to `>=3.1.0,<4` or `lodash` `^4.17.21`
+to `^5.0.0`, and the plan gives it a `review-pypi-requests` or
+`review-npm-lodash` PR that rewrites the spec and relocks. `manifests =
+false` turns all of this off.
+
 ### Provenance
 
 For npm and PyPI pins, doneram compares how the proposed release was
@@ -427,8 +464,9 @@ A plan job runs `update` on a throwaway checkout and splits what changed
 into groups, each of which becomes its own PR:
 
 - `updates`: security fixes, routine updates, safe majors, lockfile fixes,
-  pinned references, and refreshed digests
-- `review-<tool>`: one per major that changes something the repo uses
+  raised declared floors, pinned references, and refreshed digests
+- `review-<tool>`: one per major that changes something the repo uses, or
+  falls outside a declared range
 - `failing-<tool>`: one per bump that breaks `validate` (below), with the
   failure in the body, to be fixed on its branch
 
@@ -529,8 +567,8 @@ replays subsets of the bumps from a git snapshot of the tree, finds each
 bump the failure needs (up to three, in about log2(n) runs each), and moves
 each to a `failing-<tool>` PR carrying the failing output, while the rest
 ship in `updates`. If it fails with no bump applied at all, nothing is
-split and the updates PR says so. Lockfile fixes, pinned references, and
-`afterPatch` run in every trial, so a bump is only blamed for what it
+split and the updates PR says so. Lockfile fixes, declared-floor syncs,
+pinned references, and `afterPatch` run in every trial, so a bump is only blamed for what it
 changes.
 
 Separately, an update can declare a command that must pass before it is kept. For a

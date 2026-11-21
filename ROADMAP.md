@@ -146,9 +146,14 @@ owns a file does the resolving.
    `validate` command that fails is bisected over git snapshots, and each
    offending bump becomes its own PR carrying the failure. No auto-merge
    and no policy table: GitHub rulesets already decide what merges.
-5. **Declared-constraint bump plus relock.** Raise `pyproject.toml` and
-   `package.json` constraints, then run `uv lock` / `npm install
-   --package-lock-only` (the uv#6794 gap).
+5. **Declared-constraint bump plus relock. Shipped.** For each
+   `pyproject.toml` + uv.lock, `package.json` + package-lock or pnpm-lock,
+   and `go.mod`, `update` runs the package manager's own upgrade within
+   the declared ranges, raises every declared floor to the version now
+   locked (the uv#6794 gap), and relocks. The Go module upgrade, toolchain
+   retry included, moved out of the freshness workflow into doneram. A new
+   major outside a declared range becomes a `review-<tool>` PR that widens
+   the range itself.
 6. **Provenance. Shipped.** Verify npm and PyPI attestations and GitHub release
    attestations; flag a new version that lost provenance or changed
    publisher, before it is proposed.

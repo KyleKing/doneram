@@ -106,4 +106,11 @@ ignore: Listing<String> = new {}
 /// manager.
 lockfiles: Boolean = true
 
+/// On update, upgrade each uv, npm, pnpm, and Go project's lock to the
+/// newest releases its declared ranges allow, raise every declared floor
+/// (`>=X` in pyproject.toml, `^X` in package.json) to the version now
+/// locked, and relock. A new major outside a declared range is proposed as
+/// a review pull request that widens the range.
+manifests: Boolean = true
+
 tools: Mapping<String, Tool>

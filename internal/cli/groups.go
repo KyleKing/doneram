@@ -14,9 +14,10 @@ import (
 // pklGroup is one pull request's worth of a run's changes. A plan run
 // splits its changes so one risky bump never holds back the rest: every
 // security fix, routine update, and safe major goes in "updates" with the
-// lockfile, pinning, and digest changes; each major that needs review gets
-// a "review-<tool>" PR of its own; and each bump that broke validation gets
-// a "failing-<tool>" PR carrying the failure, to be fixed on its branch.
+// lockfile, declared-floor, pinning, and digest changes; each major that
+// needs review (an action's, or a release outside a declared range) gets a
+// "review-<tool>" PR of its own; and each bump that broke validation gets a
+// "failing-<tool>" PR carrying the failure, to be fixed on its branch.
 type pklGroup struct {
 	ID     string   `json:"id"`
 	Branch string   `json:"branch"`
@@ -24,7 +25,8 @@ type pklGroup struct {
 	Body   string   `json:"body"`
 	Tools  []string `json:"tools"`
 	// Extras carries the changes that are not one tool's bump: lockfile
-	// fixes, pinned floating references, and refreshed digests.
+	// fixes, locks upgraded within their declared ranges with the floors
+	// raised to match, pinned floating references, and refreshed digests.
 	Extras  bool `json:"extras,omitempty"`
 	Failing bool `json:"failing,omitempty"`
 }
@@ -105,7 +107,7 @@ func groupSummary(summary pklSummary, g pklGroup) pklSummary {
 		}
 	}
 	if g.Extras {
-		sub.Lockfiles, sub.Hardened, sub.Lifecycle = summary.Lockfiles, summary.Hardened, summary.Lifecycle
+		sub.Lockfiles, sub.Hardened, sub.Lifecycle, sub.Manifests = summary.Lockfiles, summary.Hardened, summary.Lifecycle, summary.Manifests
 	}
 	return sub
 }

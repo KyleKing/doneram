@@ -24,6 +24,7 @@ import (
 	"github.com/kyleking/doneram/internal/harden"
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/locator"
+	"github.com/kyleking/doneram/internal/manifest"
 	"github.com/kyleking/doneram/internal/osv"
 	"github.com/kyleking/doneram/internal/provenance"
 	"github.com/kyleking/doneram/internal/resolver"
@@ -64,6 +65,9 @@ type pklSummary struct {
 	// Lifecycle holds references past or nearing end of life, found with
 	// no config. They are reported, never changed.
 	Lifecycle []pklLifecycleSummary `json:"lifecycle,omitempty"`
+	// Manifests holds the projects whose locks were upgraded within their
+	// declared ranges and whose declared floors were raised to match.
+	Manifests []pklManifestSummary `json:"manifests,omitempty"`
 	// Groups splits the changes into one pull request each; see pklGroup.
 	Groups []pklGroup `json:"groups,omitempty"`
 	// Validation is the output of a validate failure no single bump
@@ -164,6 +168,9 @@ type pklRun struct {
 	// group, read from a plan run's summary, narrows an apply to one pull
 	// request's changes. Nil applies everything and plans the groups.
 	group *pklGroup
+	// resolvers overrides resolver kinds in the registry, so a test can
+	// answer without the network.
+	resolvers map[string]resolver.Resolver
 }
 
 // extras reports whether this run applies the changes that are not one
@@ -259,6 +266,9 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		out.printf("%s declares no tools and has no discoverable pins\n", path)
 	}
 	registry := resolver.Registry(httpClient)
+	for kind, r := range run.resolvers {
+		registry[kind] = r
+	}
 	lookup := func(kind string) (resolver.Resolver, bool) {
 		r, ok := registry[kind]
 		return r, ok
@@ -397,6 +407,38 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	}
 	summary.Lockfiles = locks
 	unresolved += lockErrors
+
+	// Declared ranges: a new major outside one is a review row in every
+	// run, applied only by its own group; the lock upgrade and floor sync
+	// travel with the other extras. Like lockfiles, they are whole-repo, so
+	// --only leaves them out.
+	var resync func(report)
+	if cfg.ManifestsEnabled() && len(run.only) == 0 {
+		projects, err := manifest.Find(baseDir)
+		if err != nil {
+			out.printf("? manifests: %v\n", err)
+			unresolved++
+		}
+		majors := findManifestMajors(ctx, out, baseDir, projects, lookup)
+		rows := majorRows(majors)
+		if apply && run.group != nil {
+			patchFailures += applyManifestMajors(ctx, out, majors, rows, run.group)
+		}
+		if apply && run.extras() && len(projects) > 0 {
+			var n int
+			summary.Manifests, n = syncManifests(ctx, out, baseDir, projects)
+			patchFailures += n
+			resync = func(r report) { syncManifests(ctx, r, baseDir, projects) }
+		}
+		for _, r := range rows {
+			patchedAny = patchedAny || r.Updated
+		}
+		for _, m := range summary.Manifests {
+			patchedAny = patchedAny || m.Changed
+		}
+		summary.Results = append(summary.Results, rows...)
+	}
+
 	if apply && cfg.DiscoverEnabled() && len(run.only) == 0 {
 		// Runs after every patch, so a tag a site just moved gets the
 		// digest that matches it.
@@ -445,7 +487,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 
 	var offenders map[string]string
 	if validating && patchedAny {
-		offenders, summary.Validation = validateAndBisect(ctx, out, cfg, baseDir, snapshot, results, summary, locks, run.pin)
+		offenders, summary.Validation = validateAndBisect(ctx, out, cfg, baseDir, snapshot, results, summary, locks, resync, run.pin)
 	}
 
 	finishSummary(&summary)
@@ -819,7 +861,12 @@ func finishSummary(summary *pklSummary) {
 		rows = append(rows, s)
 	}
 
-	lockFixes, pinned := 0, 0
+	lockFixes, pinned, relocked := 0, 0, 0
+	for _, m := range summary.Manifests {
+		if m.Changed {
+			relocked++
+		}
+	}
 	for _, l := range summary.Lockfiles {
 		if l.Updated {
 			lockFixes++
@@ -831,7 +878,7 @@ func finishSummary(summary *pklSummary) {
 		}
 	}
 
-	summary.HasUpgrades = len(rows)+lockFixes+pinned > 0
+	summary.HasUpgrades = len(rows)+lockFixes+pinned+relocked > 0
 	if !summary.HasUpgrades {
 		summary.Title = "chore: no pin updates available"
 		summary.Body = "doneram found no pins to update."
@@ -853,6 +900,8 @@ func finishSummary(summary *pklSummary) {
 	}
 
 	switch {
+	case len(rows) == 0 && lockFixes == 0 && pinned == 0:
+		summary.Title = fmt.Sprintf("chore: upgrade dependencies within declared ranges in %d project(s)", relocked)
 	case len(rows) == 0 && lockFixes == 0:
 		summary.Title = fmt.Sprintf("chore: pin %d floating reference(s)", pinned)
 	case len(rows) == 0:
@@ -867,8 +916,9 @@ func finishSummary(summary *pklSummary) {
 	body.WriteString("Automated pin updates from doneram.\n")
 	writeSection(&body, "Security fixes", "Each moves a pin with a published advisory to a release that clears it. "+
 		"Rows marked *ahead of --min-age* take the minimum fixed release before the cooldown would have offered it.", security)
-	writeSection(&body, "Needs review", "Majors whose release notes or interface change touch something this repo uses, and releases whose provenance changed.", review)
+	writeSection(&body, "Needs review", "Majors whose release notes or interface change touch something this repo uses, new majors outside a declared dependency range, and releases whose provenance changed.", review)
 	writeLockSection(&body, summary.Lockfiles)
+	writeManifestSection(&body, summary.Manifests)
 	writeHardenSection(&body, summary.Hardened)
 	writeLifecycleSection(&body, summary.Lifecycle)
 	writeSection(&body, "Updates", "", routine)

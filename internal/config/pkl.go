@@ -71,6 +71,16 @@ type Config struct {
 	// Lockfiles checks every package lockfiles resolve against advisories
 	// and raises a vulnerable one through its package manager. Nil means on.
 	Lockfiles *bool `json:"lockfiles"`
+	// Manifests upgrades locks within their declared ranges, raises each
+	// declared floor to what is now locked, and proposes a review bump for
+	// a new major outside a range. Nil means on.
+	Manifests *bool `json:"manifests"`
+}
+
+// ManifestsEnabled reports whether declared constraints are kept in step
+// with their locks.
+func (c *Config) ManifestsEnabled() bool {
+	return c.Manifests == nil || *c.Manifests
 }
 
 // LockfilesEnabled reports whether lockfiles are scanned.
