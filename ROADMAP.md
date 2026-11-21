@@ -281,6 +281,11 @@ all. Whether GitHub's graph accepts a non-standard `pkg:githubactions/...`
 is untested and has to be verified against a real repository before this is
 promised.
 
+Shipped as `--snapshot`, plus a workflow that posts it on every push to
+main. Action pins are submitted as `pkg:githubactions/owner/repo@vX.Y.Z`,
+the form GitHub's own Actions dependency graph uses; whether alerts fire for
+them is verified by the first submission.
+
 ### SBOM
 
 Two shapes, and doneram should not confuse them.

@@ -124,6 +124,9 @@ type pklRun struct {
 	// failOnVuln turns a pin with a known advisory still on disk into a
 	// non-zero exit, for a CI gate that blocks on CVEs.
 	failOnVuln bool
+	// snapshot, when set, is where a GitHub dependency submission snapshot
+	// of the pins on disk is written.
+	snapshot string
 	// eol overrides the endoflife.date client, nil meaning the public API.
 	eol *eol.Client
 }
@@ -195,6 +198,13 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	}
 
 	results := engine.RunSites(ctx, sites, lookup, engine.WithWorkers(run.workers))
+	// The snapshot records what is on disk now, before any patch, which
+	// is what the commit it names actually pins.
+	if run.snapshot != "" {
+		if err := writeSnapshot(ctx, run.snapshot, baseDir, results); err != nil {
+			return &ExitError{Code: ExitConfig, Err: err}
+		}
+	}
 
 	osvClient := osv.New(httpClient)
 	scanner, _ := vulnscan.Detect()

@@ -49,6 +49,10 @@ func newUpdateCommand() *cli.Command {
 				Name:  "fail-on-drift",
 				Usage: "exit non-zero when a pin is out of date, instead of reporting drift and exiting 0",
 			},
+			&cli.StringFlag{
+				Name:  "snapshot",
+				Usage: "write a GitHub dependency submission snapshot of the pins on disk to this path",
+			},
 			&cli.BoolFlag{
 				Name:  "fail-on-vuln",
 				Usage: "exit 7 when a pin with a known advisory is still on disk after the run",
@@ -96,6 +100,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				format:      format,
 				failOnDrift: cmd.Bool("fail-on-drift"),
 				failOnVuln:  cmd.Bool("fail-on-vuln"),
+				snapshot:    cmd.String("snapshot"),
 			})
 		}
 		if path := cmd.String("config"); path != "" {
@@ -112,6 +117,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				format:      format,
 				failOnDrift: cmd.Bool("fail-on-drift"),
 				failOnVuln:  cmd.Bool("fail-on-vuln"),
+				snapshot:    cmd.String("snapshot"),
 			})
 		}
 	}

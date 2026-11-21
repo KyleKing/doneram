@@ -1,0 +1,51 @@
+---
+name: Dependency graph
+
+# Submits every pin doneram tracks to GitHub's dependency graph, so pins
+# Dependabot cannot read on its own (SHA-pinned actions, mise tools, image
+# tags) still get Dependabot alerts.
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+
+      # The snapshot holds what is on disk, including sites whose registry
+      # failed to answer, so a flaky registry fails the check without
+      # losing anything from the graph.
+      - name: Write snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go run ./cmd/doneram check --min-age 0 --format json \
+            --snapshot "$RUNNER_TEMP/snapshot.json" > /dev/null || true
+          test -s "$RUNNER_TEMP/snapshot.json"
+
+      - name: Submit snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data @"$RUNNER_TEMP/snapshot.json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/dependency-graph/snapshots"
