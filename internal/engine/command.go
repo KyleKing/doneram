@@ -33,8 +33,10 @@ func (r *siteRunner) commandSite(ctx context.Context, s Site, matches []locator.
 		return result
 	}
 
-	output, err := r.commands.do(s.Command, func() ([]byte, error) {
-		return exec.CommandContext(ctx, "sh", "-c", s.Command).CombinedOutput()
+	output, err := r.commands.do(s.Dir+"\x00"+s.Command, func() ([]byte, error) {
+		cmd := exec.CommandContext(ctx, "sh", "-c", s.Command)
+		cmd.Dir = s.Dir
+		return cmd.CombinedOutput()
 	})
 	if err != nil {
 		result.Err = fmt.Errorf("running command %q: %w\noutput: %s", s.Command, err, output)

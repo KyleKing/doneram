@@ -177,6 +177,18 @@ type pklRun struct {
 	// resolvers overrides resolver kinds in the registry, so a test can
 	// answer without the network.
 	resolvers map[string]resolver.Resolver
+	// dir is the repo a run with no config checks, empty meaning the
+	// working directory. Set, command-backed tools also run from the
+	// config's directory: a fleet run checks many clones at once from one
+	// process, so the working directory cannot stand in for the repo.
+	dir string
+	// log receives the running commentary in place of stdout, so
+	// concurrent runs do not interleave theirs.
+	log io.Writer
+	// collect receives the finished summary in place of every write emit
+	// makes (stdout, --output, $GITHUB_OUTPUT), which belong to a single
+	// repo's run and not to a fleet run calling this for many.
+	collect func(pklSummary)
 }
 
 // extras reports whether this run applies the changes that are not one
@@ -194,6 +206,9 @@ func (r report) printf(format string, a ...any) {
 }
 
 func (r pklRun) out() report {
+	if r.log != nil {
+		return report{r.log}
+	}
 	if r.format == "json" {
 		return report{io.Discard}
 	}
@@ -207,6 +222,9 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	out := run.out()
 	cfg := &config.Config{}
 	baseDir := "."
+	if run.dir != "" {
+		baseDir = run.dir
+	}
 	if path != "" {
 		loaded, err := config.Load(path)
 		if err != nil {
@@ -259,6 +277,11 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	sites, err := selectSites(all, run.only)
 	if err != nil {
 		return &ExitError{Code: ExitConfig, Err: err}
+	}
+	if run.dir != "" {
+		for i := range sites {
+			sites[i].Dir = baseDir
+		}
 	}
 
 	httpClient := httpclient.New(httpclient.DefaultConfig())
@@ -520,7 +543,9 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	} else {
 		buildGroups(&summary, offenders)
 	}
-	if err := run.emit(summary, outputPath); err != nil {
+	if run.collect != nil {
+		run.collect(summary)
+	} else if err := run.emit(summary, outputPath); err != nil {
 		return err
 	}
 

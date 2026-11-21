@@ -159,9 +159,13 @@ owns a file does the resolving.
    publisher, before it is proposed.
 7. **Changelog risk beyond actions. Shipped.** Extend the safe/review/breaking grade
    to PyPI, npm, and cargo majors by mining release notes and changelogs.
-8. **Fleet CLI.** Run across many repos (an org, or a list) from one
-   process, locally on demand or hosted on a schedule, and render one view
-   of stale, vulnerable, and end-of-life pins.
+8. **Fleet CLI. Shipped.** `doneram fleet` runs across an org's repos, or
+   a list, from one process: it clones each, runs the plan in process, and
+   pushes each group to its `doneram/<group>` branch and opens or updates
+   its draft PR, so the repos need no workflow of their own. One report
+   (markdown, JSON, and the job summary) shows stale, vulnerable, floating,
+   and end-of-life pins per repo; `--dry-run` reports only. It runs locally
+   on demand, or weekly from one central repo with `examples/fleet.yml`.
 9. **IaC and other toil.** Shipped so far: end of life for Lambda
    runtimes, RDS/Aurora, EKS, ElastiCache, and OpenSearch versions in
    Terraform, CloudFormation/SAM, and Serverless files, and pinned GitHub
