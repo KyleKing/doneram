@@ -52,3 +52,21 @@ func TestGitHubActionResolver_Name(t *testing.T) {
 		t.Errorf("Name() = %s, want github-action", r.Name())
 	}
 }
+
+func TestExactTag(t *testing.T) {
+	tag := func(name, sha string) githubTag {
+		var g githubTag
+		g.Name, g.Commit.SHA = name, sha
+		return g
+	}
+	tags := []githubTag{
+		tag("v4", "s1"), tag("v4.2", "s1"), tag("v4.2.2", "s1"), tag("v4.2.3-rc1", "s1"),
+		tag("v4.3.0", "s2"), tag("v40.0.0", "s1"),
+	}
+	if got := exactTag(tags, "v4", "s1"); got != "v4.2.2" {
+		t.Errorf("exactTag(v4) = %s, want v4.2.2", got)
+	}
+	if got := exactTag(tags, "v5", "s9"); got != "v5" {
+		t.Errorf("exactTag with no match = %s, want v5", got)
+	}
+}
