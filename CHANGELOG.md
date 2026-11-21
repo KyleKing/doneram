@@ -1,3 +1,9 @@
+## v0.20.0 (2026-11-21)
+
+### Feat
+
+- add doneram fleet to cover many repos from one run (#16)
+
 ## v0.19.0 (2026-11-21)
 
 ### Feat
