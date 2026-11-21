@@ -1,9 +1,8 @@
 // doneram's own pinned versions, checked with doneram itself. Each site is a
-// literal in a file that consumes it. go.mod's own module directives are out
-// of scope: doneram doesn't manage Go module dependency versions, only
-// literal pins in text files. Every workflow reads its Go toolchain from
-// go.mod (go-version-file), so the weekly gomod step owns that version and
-// there is no second copy here to drift.
+// literal in a file that consumes it. go.mod is not a site: `update`
+// upgrades its modules with `go get -u` itself, raising the go directive
+// when a dependency demands it. Every workflow reads its Go toolchain from
+// go.mod (go-version-file), so there is no second copy here to drift.
 //
 // A site that matches a different number of times than `expect` fails the
 // run. A pattern that silently stops matching is how a pin goes stale
