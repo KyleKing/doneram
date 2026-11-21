@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kyleking/doneram/internal/walk"
+
 	"github.com/kyleking/doneram/internal/digest"
 )
 
@@ -90,7 +92,7 @@ func Scan(baseDir string) ([]Ref, error) {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if path != baseDir && (skipDirs[name] || (strings.HasPrefix(name, ".") && name != ".github")) {
+			if path != baseDir && (skipDirs[name] || (strings.HasPrefix(name, ".") && name != ".github") || walk.NestedRepo(baseDir, path)) {
 				return filepath.SkipDir
 			}
 			return nil

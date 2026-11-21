@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/kyleking/doneram/internal/walk"
+
 	"github.com/kyleking/doneram/internal/digest"
 )
 
@@ -47,7 +49,7 @@ func imageFiles(baseDir string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
-			if path != baseDir && imageSkipDirs[d.Name()] {
+			if path != baseDir && (imageSkipDirs[d.Name()] || walk.NestedRepo(baseDir, path)) {
 				return filepath.SkipDir
 			}
 			return nil

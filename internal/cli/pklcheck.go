@@ -183,7 +183,7 @@ type pklRun struct {
 	resolvers map[string]resolver.Resolver
 	// dir is the repo a run with no config checks, empty meaning the
 	// working directory. Set, command-backed tools also run from the
-	// config's directory: a fleet run checks many clones at once from one
+	// config's directory: a fleet run checks many repos at once from one
 	// process, so the working directory cannot stand in for the repo.
 	dir string
 	// log receives the running commentary in place of stdout, so
