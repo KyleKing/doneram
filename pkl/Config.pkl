@@ -93,4 +93,11 @@ discover: Boolean = true
 /// (`"actions/checkout"`, `"node"`).
 ignore: Listing<String> = new {}
 
+/// Check every package a lockfile resolves (uv.lock, poetry.lock,
+/// Cargo.lock, package-lock.json, pnpm-lock.yaml, go.mod, Gemfile.lock,
+/// composer.lock) against OSV advisories, and on update raise a vulnerable
+/// one to its minimum fixed release through the lockfile's own package
+/// manager.
+lockfiles: Boolean = true
+
 tools: Mapping<String, Tool>

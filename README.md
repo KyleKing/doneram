@@ -321,6 +321,22 @@ A hold is never overridden. When the only fix sits above the ceiling, the
 report says held, vulnerable, and no fix underneath it, and leaves the call
 to you.
 
+### Lockfiles
+
+The pins above are the ones a repo writes by hand. Everything else, the
+transitive graph, lives in lockfiles, and doneram checks those too with no
+config: every package in `uv.lock`, `poetry.lock`, `pdm.lock`,
+`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml`, `go.mod`,
+`Gemfile.lock`, and `composer.lock` under the repo goes to OSV in one batch.
+A vulnerable package is reported with the minimum release that clears all
+of its advisories, and `update` raises it by handing the lockfile back to
+its own package manager (`uv lock --upgrade-package urllib3==1.26.5`,
+`cargo update --package time --precise 0.2.23`, `go get
+golang.org/x/net@v0.23.0`, ...). doneram never resolves a graph itself; a
+package manager that is not installed leaves the command in the report to
+run by hand. Findings count toward `--fail-on-vuln`, and `lockfiles =
+false` turns the scan off.
+
 ### Dependabot alerts for every pin
 
 Dependabot reads language manifests and nothing else, so it never sees a

@@ -65,6 +65,14 @@ type Config struct {
 	// Ignore names discovered tools to leave unchecked, e.g.
 	// "actions/checkout" or a mise tool name.
 	Ignore []string `json:"ignore"`
+	// Lockfiles checks every package lockfiles resolve against advisories
+	// and raises a vulnerable one through its package manager. Nil means on.
+	Lockfiles *bool `json:"lockfiles"`
+}
+
+// LockfilesEnabled reports whether lockfiles are scanned.
+func (c *Config) LockfilesEnabled() bool {
+	return c.Lockfiles == nil || *c.Lockfiles
 }
 
 // DiscoverEnabled reports whether discovered pins join the declared ones.

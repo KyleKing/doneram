@@ -48,9 +48,12 @@ re-lock is a real gap it can fill. The rule is to do as little as possible
 and hand the install, resolve, and lock steps back to the tool that owns
 them.
 
-**Out of scope.** copier, entirely: template updates, `.rej` resolution, and
-`.copier-answers.yml` are somebody else's problem, including reading
-`_commit` to compute template drift. Dependency resolution: doneram never
+**Copier, narrowly.** A `.copier-answers.yml` `_commit` is a pin like any
+other: doneram reads it against the template's tags and hands the move to
+`copier update`. Resolving `.rej` conflicts stays with copier and the
+person running it.
+
+**Out of scope.** Dependency resolution: doneram never
 reimplements what uv, go, npm, or mise already do. Container execution for
 vulnerability data, since the whole ecosystem reads image layers statically.
 
@@ -111,6 +114,46 @@ yanked, since that one is already installed everywhere. Shipped for PyPI,
 crates.io, and npm (whose closest analogue is a deprecated version) through
 `resolver.YankChecker`; a withdrawn pin moves back to the newest standing
 release.
+
+## Next: the agreed build order
+
+Agreed after M6 shipped, built in this order, one merged PR each. Every
+item keeps the rule above: doneram finds and decides, and the tool that
+owns a file does the resolving.
+
+1. **Lockfile CVE scan. Shipped.** Every package in uv/poetry/pdm/Cargo
+   lockfiles, package-lock, pnpm-lock, go.mod, Gemfile.lock, and
+   composer.lock is checked against OSV in one batch, and `update` raises a
+   vulnerable one through the lockfile's own package manager. Building it
+   surfaced that the minimum fix only cleared the first advisory a pin had,
+   not all of them, which is fixed for pins too.
+2. **Pin hardening.** `doneram pin` turns a tag-pinned action into
+   `<sha> # vX.Y.Z`, a Docker `FROM` tag into `tag@sha256:`, and a floating
+   mise version into an exact one, so discovery and advisories reach them.
+3. **EOL runtimes with no config.** Discovered tools (python, node, go,
+   ruby, java, terraform, postgres images) get their endoflife.date product
+   assigned automatically, so a runtime past end-of-life is flagged and its
+   next supported cycle proposed without an `eol` line.
+4. **PR shape, kept lean.** Split one PR per review/breaking item from the
+   security-plus-routine PR so one risky bump never blocks the rest, and a
+   `validate` command that, on failure, bisects the bumps and holds the
+   offender with the failure as its reason. No auto-merge and no policy
+   table: GitHub rulesets already decide what merges.
+5. **Declared-constraint bump plus relock.** Raise `pyproject.toml` and
+   `package.json` constraints, then run `uv lock` / `npm install
+   --package-lock-only` (the uv#6794 gap).
+6. **Provenance.** Verify npm and PyPI attestations and GitHub release
+   attestations; flag a new version that lost provenance or changed
+   publisher, before it is proposed.
+7. **Changelog risk beyond actions.** Extend the safe/review/breaking grade
+   to PyPI, npm, and cargo majors by mining release notes and changelogs.
+8. **Fleet CLI.** Run across many repos (an org, or a list) from one
+   process, locally on demand or hosted on a schedule, and render one view
+   of stale, vulnerable, and end-of-life pins.
+9. **IaC and other toil.** Terraform and Pulumi providers and modules;
+   versions in IaC with an end of life (Lambda runtimes, RDS/Aurora, EKS,
+   ElastiCache, OpenSearch); AMI IDs and SSM public parameters; API version
+   strings in code (Stripe, GitHub); and copier template drift.
 
 ## Decisions this plan assumes
 
