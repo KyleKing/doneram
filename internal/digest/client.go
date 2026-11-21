@@ -3,6 +3,7 @@ package digest
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -11,8 +12,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/kyleking/doneram/internal/cloud"
 )
 
 // manifestTypes lists the index types first so a multi-arch tag resolves to
@@ -38,11 +42,15 @@ var errRateLimited = errors.New("registry rate limit reached (status 429): retry
 type Client struct {
 	http   *http.Client
 	getenv func(string) string
+	// run executes a cloud CLI for a private registry's login (ECR,
+	// Artifact Registry), nil meaning cloud.Run.
+	run cloud.Runner
 
 	mu      sync.Mutex
 	baseURL map[string]string // registry host -> base URL
 	tokens  map[string]string // registry + "/" + repository -> bearer token
 	digests map[string]string // registry + "/" + repository + ":" + tag -> digest
+	noLogin map[string]error  // registry -> why its cloud login is unavailable
 }
 
 // New returns a Client that sends requests through client, or
@@ -54,9 +62,11 @@ func New(client *http.Client) *Client {
 	return &Client{
 		http:    client,
 		getenv:  os.Getenv,
+		run:     cloud.Run,
 		baseURL: map[string]string{},
 		tokens:  map[string]string{},
 		digests: map[string]string{},
+		noLogin: map[string]error{},
 	}
 }
 
@@ -127,6 +137,12 @@ func (c *Client) fetch(ctx context.Context, registry string, ref Ref) (string, e
 	case http.StatusNotFound:
 		return "", fmt.Errorf("tag %q not found", ref.Tag)
 	case http.StatusUnauthorized, http.StatusForbidden:
+		c.mu.Lock()
+		noLogin := c.noLogin[registry]
+		c.mu.Unlock()
+		if noLogin != nil {
+			return "", noLogin
+		}
 		return "", fmt.Errorf("access denied (status %d)", resp.StatusCode)
 	case http.StatusTooManyRequests:
 		return "", errRateLimited
@@ -176,7 +192,9 @@ func (c *Client) do(ctx context.Context, method, u, registry, repository string)
 		c.mu.Lock()
 		token := c.tokens[tokenKey]
 		c.mu.Unlock()
-		if token != "" {
+		if strings.HasPrefix(token, "Basic ") {
+			req.Header.Set("Authorization", token)
+		} else if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 
@@ -193,7 +211,19 @@ func (c *Client) do(ctx context.Context, method, u, registry, repository string)
 
 		params, ok := parseBearerChallenge(challenge)
 		if !ok {
-			return nil, fmt.Errorf("registry requires authentication this client does not support: %q", challenge)
+			// ECR answers with a Basic challenge: the login is the
+			// credential itself, sent on every request.
+			user, pass, err := c.cloudLogin(ctx, registry)
+			if err != nil {
+				return nil, err
+			}
+			if user == "" {
+				return nil, fmt.Errorf("registry requires authentication this client does not support: %q", challenge)
+			}
+			c.mu.Lock()
+			c.tokens[tokenKey] = "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+pass))
+			c.mu.Unlock()
+			continue
 		}
 		if params["scope"] == "" {
 			params["scope"] = "repository:" + repository + ":pull"
@@ -230,11 +260,28 @@ func (c *Client) fetchToken(ctx context.Context, registry string, params map[str
 	realm.RawQuery = q.Encode()
 
 	if gh := c.getenv("GITHUB_TOKEN"); gh != "" && registry == "ghcr.io" && c.trustedRealm(registry, realm) {
-		if token, err := c.requestToken(ctx, realm.String(), gh); err == nil {
+		if token, err := c.requestToken(ctx, realm.String(), "token", gh); err == nil {
 			return token, nil
 		}
 	}
-	return c.requestToken(ctx, realm.String(), "")
+	// Artifact Registry and gcr.io issue a pull token for gcloud's access
+	// token, sent only to a realm on the registry's own host.
+	// Without a login, a public image still pulls anonymously; a private
+	// one is then refused and reported with the login's own error.
+	if c.trustedRealm(registry, realm) {
+		user, pass, err := c.cloudLogin(ctx, registry)
+		switch {
+		case errors.Is(err, cloud.ErrUnavailable):
+			c.mu.Lock()
+			c.noLogin[registry] = err
+			c.mu.Unlock()
+		case err != nil:
+			return "", err
+		case user != "":
+			return c.requestToken(ctx, realm.String(), user, pass)
+		}
+	}
+	return c.requestToken(ctx, realm.String(), "", "")
 }
 
 // trustedRealm keeps GITHUB_TOKEN from being sent to a realm on another host,
@@ -247,13 +294,13 @@ func (c *Client) trustedRealm(registry string, realm *url.URL) bool {
 	return err == nil && realm.Host == base.Host
 }
 
-func (c *Client) requestToken(ctx context.Context, realm, password string) (string, error) {
+func (c *Client) requestToken(ctx context.Context, realm, user, password string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, realm, nil)
 	if err != nil {
 		return "", fmt.Errorf("creating token request: %w", err)
 	}
 	if password != "" {
-		req.SetBasicAuth("token", password)
+		req.SetBasicAuth(user, password)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -309,4 +356,29 @@ func parseBearerChallenge(header string) (map[string]string, bool) {
 		return nil, false
 	}
 	return params, true
+}
+
+// ecrHost is a private ECR registry: <account>.dkr.ecr[-fips].<region>.amazonaws.com.
+var ecrHost = regexp.MustCompile(`^\d{12}\.dkr\.ecr(?:-fips)?\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?$`)
+
+// cloudLogin returns the registry login a cloud CLI issues for a private
+// registry it owns: `aws ecr get-login-password` for ECR, `gcloud auth
+// print-access-token` for Artifact Registry and gcr.io. An empty user means
+// the registry is not a cloud one; ErrUnavailable means it is, and this
+// machine has no CLI or credentials for it.
+func (c *Client) cloudLogin(ctx context.Context, registry string) (user, pass string, err error) {
+	run := c.run
+	if run == nil {
+		run = cloud.Run
+	}
+	switch {
+	case ecrHost.MatchString(registry):
+		region := ecrHost.FindStringSubmatch(registry)[1]
+		pass, err = run(ctx, "aws", "ecr", "get-login-password", "--region", region)
+		return "AWS", pass, err
+	case strings.HasSuffix(registry, "-docker.pkg.dev"), registry == "gcr.io", strings.HasSuffix(registry, ".gcr.io"):
+		pass, err = run(ctx, "gcloud", "auth", "print-access-token")
+		return "oauth2accesstoken", pass, err
+	}
+	return "", "", nil
 }

@@ -6,6 +6,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -80,6 +81,9 @@ type SiteResult struct {
 	// the newest one outside the window predates it. Latest is left empty
 	// so the pin is never patched backwards.
 	Behind string
+	// Skipped says why a site was not checked here: its resolver needs a
+	// cloud CLI or credentials this machine lacks. It is not a failure.
+	Skipped string
 	// Yanked is set when the registry has withdrawn the version on disk
 	// (yanked on PyPI or crates.io, deprecated on npm), holding the reason
 	// the registry gives, or "yanked" when it gives none.
@@ -205,6 +209,10 @@ func (r *siteRunner) site(ctx context.Context, s Site) SiteResult {
 	latest, err := r.resolved.do(key, func() (string, error) {
 		return res.Resolve(ctx, s.resolverName(), s.constraint())
 	})
+	if errors.Is(err, resolver.ErrUnavailable) {
+		result.Skipped = err.Error()
+		return result
+	}
 	if err != nil {
 		result.Err = err
 		return result

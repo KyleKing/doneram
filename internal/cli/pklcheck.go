@@ -85,13 +85,16 @@ type pklSiteSummary struct {
 	Latest  string `json:"latest,omitempty"`
 	Behind  string `json:"behind,omitempty"`
 	// Yanked is the registry's reason the pinned version was withdrawn.
-	Yanked          string `json:"yanked,omitempty"`
-	Updated         bool   `json:"updated"`
-	needsUpdate     bool
-	Held            string           `json:"held,omitempty"`
-	Detail          string           `json:"detail,omitempty"`
-	Compare         string           `json:"compare,omitempty"`
-	Error           string           `json:"error,omitempty"`
+	Yanked      string `json:"yanked,omitempty"`
+	Updated     bool   `json:"updated"`
+	needsUpdate bool
+	Held        string `json:"held,omitempty"`
+	Detail      string `json:"detail,omitempty"`
+	Compare     string `json:"compare,omitempty"`
+	Error       string `json:"error,omitempty"`
+	// Skipped says why the site was not checked here (no cloud CLI or
+	// credentials for its resolver).
+	Skipped         string           `json:"skipped,omitempty"`
 	Vulnerabilities []pklVulnSummary `json:"vulnerabilities,omitempty"`
 	PatchedVersion  string           `json:"patchedVersion,omitempty"`
 	HeldVulnerable  bool             `json:"heldVulnerable,omitempty"`
@@ -732,6 +735,8 @@ func siteHeadline(result engine.SiteResult) string {
 		return fmt.Sprintf("✗ %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, mismatch)
 	case result.Err != nil:
 		return fmt.Sprintf("? %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, result.Err)
+	case result.Skipped != "":
+		return fmt.Sprintf("· %s: skipped, %s", result.Site.Tool, result.Skipped)
 	case result.Behind != "" && len(result.Matches) > 0:
 		return fmt.Sprintf("· %s: kept at %s, the newest eligible release (%s) is older", result.Site.Tool, result.Matches[0].Value, result.Behind)
 	case result.Latest == "" && len(result.Matches) > 0:
@@ -840,6 +845,7 @@ func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSumma
 	if result.Err != nil {
 		s.Error = result.Err.Error()
 	}
+	s.Skipped = result.Skipped
 	for _, f := range vuln.Findings {
 		s.Vulnerabilities = append(s.Vulnerabilities, pklVulnSummary{
 			Package:  f.Package,
