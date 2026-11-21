@@ -26,6 +26,9 @@ const (
 	// ExitUnpinned: --fail-on-unpinned (or `pin --check`) and an action
 	// or tool still names a moving target.
 	ExitUnpinned = 8
+	// ExitEOL: --fail-on-eol and a runtime, image, runner, language floor,
+	// or model is past its end of life.
+	ExitEOL = 9
 )
 
 // ExitError carries the process exit code for an error. main reads it

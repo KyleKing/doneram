@@ -420,3 +420,12 @@ func TestGetIndex_EmptySlice(t *testing.T) {
 		t.Errorf("getIndex(empty, 0) = %s, want empty", got)
 	}
 }
+
+func TestWildcardRejectsInlinePrerelease(t *testing.T) {
+	p := ParsePattern("#.#.#")
+	for v, want := range map[string]bool{"3.16.0a2": false, "3.14.0rc1": false, "3.13.5": true, "v3.13.5": true, "3.13": true} {
+		if got := p.Matches(v); got != want {
+			t.Errorf("Matches(%q) = %v, want %v", v, got, want)
+		}
+	}
+}

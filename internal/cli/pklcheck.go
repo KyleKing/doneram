@@ -59,6 +59,9 @@ type pklSummary struct {
 	// Hardened holds floating references (actions by tag, mise prefixes),
 	// pinned in place when the run applies.
 	Hardened []pklHardenSummary `json:"hardened,omitempty"`
+	// Lifecycle holds references past or nearing end of life, found with
+	// no config. They are reported, never changed.
+	Lifecycle []pklLifecycleSummary `json:"lifecycle,omitempty"`
 }
 
 type pklSiteSummary struct {
@@ -144,6 +147,9 @@ type pklRun struct {
 	// failOnUnpinned turns a floating reference left on disk into a
 	// non-zero exit.
 	failOnUnpinned bool
+	// failOnEOL turns a reference past its end of life into a non-zero
+	// exit.
+	failOnEOL bool
 }
 
 // report is the running commentary. The json format keeps stdout clean for
@@ -227,19 +233,10 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 			lockErrors++
 		}
 	}
-	// An apply run goes on regardless: images already pinned by digest
-	// are refreshed after the (here empty) patch step.
-	if len(sites) == 0 && len(locks) == 0 && len(hardened) == 0 && !apply {
+	// With nothing to pin the run still goes on: lockfiles, image digests,
+	// and end-of-life references need no site.
+	if len(sites) == 0 {
 		out.printf("%s declares no tools and has no discoverable pins\n", path)
-		summary := pklSummary{Results: []pklSiteSummary{}}
-		finishSummary(&summary)
-		if err := run.emit(summary, outputPath); err != nil {
-			return err
-		}
-		if lockErrors > 0 {
-			return exitf(ExitUnresolved, "lockfile scan failed")
-		}
-		return nil
 	}
 	registry := resolver.Registry(httpClient)
 	lookup := func(kind string) (resolver.Resolver, bool) {
@@ -367,6 +364,26 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	}
 	summary.Hardened = hardened
 	unresolved += hardenFailures
+
+	if cfg.DiscoverEnabled() && len(run.only) == 0 {
+		// A line a config site already checks with its own eol is
+		// reported there, once.
+		covered := map[string]bool{}
+		for _, r := range results {
+			if r.Site.EOL == "" {
+				continue
+			}
+			for _, m := range r.Matches {
+				abs, _ := filepath.Abs(m.File)
+				covered[fmt.Sprintf("%s:%d", abs, m.Line)] = true
+			}
+		}
+		lc, err := checkLifecycle(ctx, out, baseDir, eolClient, now, covered)
+		if err != nil {
+			return err
+		}
+		summary.Lifecycle = lc
+	}
 	for _, h := range hardened {
 		patchedAny = patchedAny || h.Updated
 	}
@@ -411,6 +428,23 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 		if floating > 0 {
 			return exitf(ExitUnpinned, "%d floating reference(s); `doneram pin` pins them", floating)
+		}
+	}
+
+	if run.failOnEOL {
+		past := 0
+		for _, l := range summary.Lifecycle {
+			if l.Past {
+				past++
+			}
+		}
+		for _, r := range summary.Results {
+			if r.EOL != nil && r.EOL.DaysLeft != nil && *r.EOL.DaysLeft < 0 {
+				past++
+			}
+		}
+		if past > 0 {
+			return exitf(ExitEOL, "%d reference(s) are past end of life", past)
 		}
 	}
 
@@ -774,6 +808,7 @@ func finishSummary(summary *pklSummary) {
 	writeSection(&body, "Needs review", "Major action bumps that change something this repo's workflows use.", review)
 	writeLockSection(&body, summary.Lockfiles)
 	writeHardenSection(&body, summary.Hardened)
+	writeLifecycleSection(&body, summary.Lifecycle)
 	writeSection(&body, "Updates", "", routine)
 	summary.Body = body.String()
 }

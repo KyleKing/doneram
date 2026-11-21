@@ -18,6 +18,14 @@ type Status struct {
 	Product string
 	Cycle   string
 	Date    time.Time
+	// Ended is set when endoflife.date marks the cycle ended without a
+	// date (`"eol": true`).
+	Ended bool
+}
+
+// Past reports whether the cycle has reached end of life by now.
+func (s Status) Past(now time.Time) bool {
+	return s.Ended || (!s.Date.IsZero() && s.DaysLeft(now) < 0)
 }
 
 // DaysLeft counts whole days from now until Date, negative once past it.
@@ -42,8 +50,9 @@ func NewWithBaseURL(client *http.Client, baseURL string) *Client {
 }
 
 type cycle struct {
-	Cycle string          `json:"cycle"`
-	EOL   json.RawMessage `json:"eol"`
+	Cycle    string          `json:"cycle"`
+	Codename string          `json:"codename"`
+	EOL      json.RawMessage `json:"eol"`
 }
 
 // Lookup finds the cycle of product that version belongs to, the longest
@@ -56,21 +65,59 @@ func (c *Client) Lookup(ctx context.Context, product, version string) (Status, e
 	}
 
 	version = strings.TrimPrefix(version, "v")
+	best := longestCycle(cycles, version, ".")
+	if best == nil {
+		// A distro release is often named by codename ("bookworm").
+		for i := range cycles {
+			if cycles[i].Codename != "" && strings.EqualFold(cycles[i].Codename, version) {
+				best = &cycles[i]
+			}
+		}
+	}
+	if best == nil {
+		return Status{}, fmt.Errorf("endoflife.date lists no %s cycle covering %s", product, version)
+	}
+	return best.status(product)
+}
+
+// LookupID finds the cycle an identifier belongs to where cycles are names
+// rather than version numbers: a model ID ("claude-opus-4-8-20260101")
+// lands in its longest cycle equal to it or prefixing it at a dash, and a
+// runner label ("ubuntu-22.04") in the cycle of the same name.
+func (c *Client) LookupID(ctx context.Context, product, id string) (Status, error) {
+	cycles, err := c.fetch(ctx, product)
+	if err != nil {
+		return Status{}, err
+	}
+	best := longestCycle(cycles, id, "-")
+	if best == nil {
+		return Status{}, fmt.Errorf("endoflife.date lists no %s cycle covering %s", product, id)
+	}
+	return best.status(product)
+}
+
+// longestCycle returns the longest cycle equal to v or prefixing it at sep.
+func longestCycle(cycles []cycle, v, sep string) *cycle {
 	var best *cycle
 	for i := range cycles {
 		name := cycles[i].Cycle
-		if version != name && !strings.HasPrefix(version, name+".") {
+		if v != name && !strings.HasPrefix(v, name+sep) {
 			continue
 		}
 		if best == nil || len(name) > len(best.Cycle) {
 			best = &cycles[i]
 		}
 	}
-	if best == nil {
-		return Status{}, fmt.Errorf("endoflife.date lists no %s cycle covering %s", product, version)
-	}
+	return best
+}
 
+func (best *cycle) status(product string) (Status, error) {
 	status := Status{Product: product, Cycle: best.Cycle}
+	var ended bool
+	if json.Unmarshal(best.EOL, &ended) == nil {
+		status.Ended = ended
+		return status, nil
+	}
 	var date string
 	if json.Unmarshal(best.EOL, &date) == nil {
 		parsed, err := time.Parse(time.DateOnly, date)

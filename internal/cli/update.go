@@ -55,6 +55,10 @@ func newUpdateCommand() *cli.Command {
 				Usage: "write a GitHub dependency submission snapshot of the pins on disk to this path",
 			},
 			&cli.BoolFlag{
+				Name:  "fail-on-eol",
+				Usage: "exit 9 when a runtime, base image, runner, language floor, or model is past end of life",
+			},
+			&cli.BoolFlag{
 				Name:  "fail-on-unpinned",
 				Usage: "exit 8 when an action is used by tag or a mise tool by prefix after the run",
 			},
@@ -106,6 +110,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				failOnDrift:    cmd.Bool("fail-on-drift"),
 				failOnVuln:     cmd.Bool("fail-on-vuln"),
 				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
+				failOnEOL:      cmd.Bool("fail-on-eol"),
 				snapshot:       cmd.String("snapshot"),
 			})
 		}
@@ -114,7 +119,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 		}
 		// With no config and no Dockerfile, check what discovery finds:
 		// SHA-pinned actions and mise tools need no config at all.
-		if !fileExists("Dockerfile") {
+		if !directiveDockerfile("Dockerfile") {
 			return runCheckPkl(ctx, pklRun{
 				apply:          true,
 				output:         cmd.String("output"),
@@ -124,6 +129,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				failOnDrift:    cmd.Bool("fail-on-drift"),
 				failOnVuln:     cmd.Bool("fail-on-vuln"),
 				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
+				failOnEOL:      cmd.Bool("fail-on-eol"),
 				snapshot:       cmd.String("snapshot"),
 			})
 		}

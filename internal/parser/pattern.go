@@ -58,7 +58,7 @@ func (p *VersionPattern) Matches(v string) bool {
 		versionSuffix = v[suffixIdx+1:]
 	}
 
-	parts := strings.Split(versionPart, ".")
+	parts := strings.Split(strings.TrimPrefix(versionPart, "v"), ".")
 
 	if !matchSegment(p.Major, getIndex(parts, 0)) {
 		return false
@@ -85,9 +85,16 @@ func (p *VersionPattern) Matches(v string) bool {
 	return true
 }
 
+// matchSegment matches one dotted segment. A "#" wildcard takes any
+// number, but not a PEP 440 prerelease written into the segment ("0a2",
+// "0rc1"), which would otherwise slip past the suffix check that only
+// looks after a dash.
 func matchSegment(pattern, value string) bool {
-	if pattern == "" || pattern == "#" {
+	if pattern == "" {
 		return true
+	}
+	if pattern == "#" {
+		return strings.TrimLeft(value, "0123456789") == ""
 	}
 	return pattern == value
 }
