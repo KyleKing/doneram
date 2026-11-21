@@ -42,7 +42,7 @@ func newPinCommand() *cli.Command {
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			out := report{w: os.Stdout}
-			found, failures, err := hardenRepo(ctx, out, ".", !cmd.Bool("check"), nil)
+			found, failures, err := hardenRepo(ctx, out, ".", !cmd.Bool("check"), nil, nil)
 			if err != nil {
 				return err
 			}
@@ -94,11 +94,15 @@ func defaultPinResolver(client *http.Client) harden.Resolver {
 
 // hardenRepo scans baseDir for floating references and, with apply, pins
 // them. It returns every finding and how many could not be pinned.
-func hardenRepo(ctx context.Context, out report, baseDir string, apply bool, r harden.Resolver) ([]pklHardenSummary, int, error) {
+//
+// owned is the set of template-maintained files (see templateOwnership),
+// whose references are the template's to pin.
+func hardenRepo(ctx context.Context, out report, baseDir string, apply bool, r harden.Resolver, owned map[string]string) ([]pklHardenSummary, int, error) {
 	findings, err := harden.Scan(baseDir)
 	if err != nil {
 		return nil, 0, fmt.Errorf("scanning for floating references: %w", err)
 	}
+	findings = notOwned(findings, owned)
 	if len(findings) == 0 {
 		return nil, 0, nil
 	}
@@ -125,10 +129,13 @@ func hardenRepo(ctx context.Context, out report, baseDir string, apply bool, r h
 // OS security patches.
 //
 // only, when set, limits the refresh to those absolute file:line spots.
-func refreshDigests(ctx context.Context, out report, baseDir string, r harden.Resolver, only map[string]bool) ([]pklHardenSummary, int, error) {
+func refreshDigests(ctx context.Context, out report, baseDir string, r harden.Resolver, only map[string]bool, owned map[string]string) ([]pklHardenSummary, int, error) {
 	findings, err := harden.ScanDigests(baseDir)
-	if err != nil || len(findings) == 0 {
+	if err != nil {
 		return nil, 0, err
+	}
+	if findings = notOwned(findings, owned); len(findings) == 0 {
+		return nil, 0, nil
 	}
 	if only != nil {
 		kept := findings[:0]
@@ -238,4 +245,18 @@ func label(f harden.Finding) string {
 		return f.Name
 	}
 	return f.Name + "@" + f.Ref
+}
+
+// notOwned drops findings in files a copier template maintains.
+func notOwned(findings []harden.Finding, owned map[string]string) []harden.Finding {
+	if len(owned) == 0 {
+		return findings
+	}
+	kept := findings[:0:0]
+	for _, f := range findings {
+		if _, ok := ownedBy(owned, f.File); !ok {
+			kept = append(kept, f)
+		}
+	}
+	return kept
 }

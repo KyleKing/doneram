@@ -10,7 +10,9 @@ variable default. Dockerfiles get a comment syntax because a `FROM` line
 reads better with a directive above it than with an entry in a config file.
 Everything else is declared in the repo's config.
 
-doneram does not resolve dependency graphs, manage lockfiles, or run copier.
+Beyond declared pins, doneram scans lockfiles for advisories, raises
+declared floors and relocks, pins floating references, reports end-of-life
+runtimes, and moves projects to their copier template's newest release.
 [ROADMAP.md](./ROADMAP.md) draws the full in-scope and out-of-scope line and
 carries the milestones. The design reasoning is in
 [generalizing.md](./generalizing.md).
@@ -116,11 +118,45 @@ is pinned to a template release by `_commit` in `.copier-answers.yml`.
 doneram reads it (and `.copier-answers.*.yml` beside it or one directory
 down), finds the template repository's newest release on GitHub, and on
 `update` runs `copier update --defaults --skip-answered --vcs-ref <tag>`,
-which re-renders the template and merges it with local edits. That runs
-before any pin is checked, so pins the template writes are checked in the
-same run. `--trust` is never passed: a template whose update runs tasks
-fails, and the report gives the command to run by hand. Conflicts are left
-as markers or `.rej` files for the PR's reviewer.
+which re-renders the template and merges it with local edits. Conflicts are
+left as markers or `.rej` files for the PR's reviewer.
+
+**The template owns its files' pins.** A file the template keeps rendering
+(a workflow, a shared mise config) gets its pins from the template, so
+doneram leaves them alone in the project and reports how many it left:
+
+```
+  13 pin(s) left to template gh:acme/go-template, which releases them to this project
+```
+
+Bump them once in the template, release it, and every project picks them
+up as a copier update, instead of each project patching the same workflow
+line and then merging against the next update. doneram lists the template
+at `_commit` (`_subdirectory`, `.jinja` suffixes, and conditional names
+like `{% if flag %}dir{% endif %}` are understood) and leaves to the
+project every file the template does not render, plus its
+`_skip_if_exists` files, which the template writes once and never again.
+Lockfiles, `go.mod`, and other project-owned files are still checked here.
+A pin the project wants to move anyway can be declared in its config,
+since declared sites are always checked.
+
+**Tasks run only for a trusted template.** copier refuses to update a
+template with `_tasks` or `_migrations` unless given `--trust`. doneram
+passes it when the template lives under the same GitHub account as the
+project, since that code is the owner's own, or when the template's
+`_src_path` is listed:
+
+```pkl
+trustTemplates = new { "gh:acme/shared-template" }
+```
+
+Any other template whose update needs tasks fails, and the report gives
+the command to run by hand.
+
+In the template repository itself, declare the pins in its `.jinja`
+sources with an `afterPatch` that re-renders, so the weekly PR there is
+the one place a version moves. `doneram fleet` then rolls the release out:
+each project's run proposes the copier update in its weekly PR.
 
 ### Pinning floating references
 

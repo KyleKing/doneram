@@ -113,4 +113,10 @@ lockfiles: Boolean = true
 /// a review pull request that widens the range.
 manifests: Boolean = true
 
+/// Copier templates whose tasks and migrations `copier update` may run
+/// (`--trust`), by `_src_path` as the answers file writes it
+/// (`"gh:acme/template"`). A template owned by the same GitHub account
+/// as this repository is trusted without being listed: its code is yours.
+trustTemplates: Listing<String> = new {}
+
 tools: Mapping<String, Tool>
