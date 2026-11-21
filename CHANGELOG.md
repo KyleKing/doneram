@@ -1,3 +1,9 @@
+## v0.17.0 (2026-11-21)
+
+### Feat
+
+- raise declared floors to the locked version and relock (#13)
+
 ## v0.16.0 (2026-11-21)
 
 ### Feat
