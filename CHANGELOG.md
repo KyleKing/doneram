@@ -1,3 +1,9 @@
+## v0.14.0 (2026-11-21)
+
+### Feat
+
+- report end of life for runtimes, images, runners, and models (#10)
+
 ## v0.13.0 (2026-11-21)
 
 ### Feat
