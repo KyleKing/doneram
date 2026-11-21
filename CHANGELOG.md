@@ -1,3 +1,15 @@
+## v3.0.0 (2026-11-21)
+
+### BREAKING CHANGE
+
+- check and update drop --file/-f, --skip-build, and
+--skip-healthcheck, and check drops --apply (use update). Set
+`validate = "docker build ."` to build after an image bump.
+
+### Feat
+
+- run Dockerfile directives through the main engine (#23)
+
 ## v2.0.2 (2026-11-21)
 
 ### Fix
