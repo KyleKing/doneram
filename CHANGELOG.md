@@ -1,3 +1,15 @@
+## v1.0.0 (2026-11-21)
+
+### BREAKING CHANGE
+
+- the GitHub clone/push/PR mode is gone, with --org,
+--repo, --repos-file, --close-stale, --workdir, --dry-run, --author,
+--min-age, and examples/fleet.yml.
+
+### Feat
+
+- make doneram fleet run over local checkouts (#19)
+
 ## v0.22.0 (2026-11-21)
 
 ### Feat
