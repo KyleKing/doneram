@@ -1,3 +1,9 @@
+## v0.9.0 (2026-11-21)
+
+### Feat
+
+- never propose a withdrawn version and flag a withdrawn pin (#5)
+
 ## v0.8.0 (2026-11-21)
 
 ### Feat
