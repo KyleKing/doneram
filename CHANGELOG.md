@@ -1,3 +1,9 @@
+## v0.13.0 (2026-11-21)
+
+### Feat
+
+- pin container images by digest and refresh digests on update (#9)
+
 ## v0.12.0 (2026-11-21)
 
 ### Feat
