@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/kyleking/doneram/internal/actionrisk"
+	"github.com/kyleking/doneram/internal/changelog"
 	"github.com/kyleking/doneram/internal/engine"
+	"github.com/kyleking/doneram/internal/provenance"
 )
 
 // assessRisks judges each github-action site moving across a major version
@@ -41,6 +43,49 @@ func assessRisks(ctx context.Context, results []engine.SiteResult, client *actio
 			continue
 		}
 		out[i] = a
+	}
+	return out
+}
+
+// assessLibraryRisks grades each PyPI, npm, and cargo site moving across a
+// major by its release notes against this repo's code, filling the slots
+// assessRisks left empty. Like actions, a grade that could not be read is
+// review, never safe.
+func assessLibraryRisks(ctx context.Context, results []engine.SiteResult, risks []actionrisk.Assessment, client *changelog.Client, repoDir string) {
+	for i, r := range results {
+		kind := r.Site.Locator.Resolver
+		if r.Err != nil || !changelog.Supported(kind) || r.Latest == "" || len(r.Matches) == 0 || risks[i].Level != "" {
+			continue
+		}
+		from := r.Matches[0].Value
+		if !changelog.IsMajor(from, r.Latest) {
+			continue
+		}
+		a, err := client.Assess(ctx, kind, siteResolverName(r.Site), from, r.Latest, repoDir)
+		if err != nil {
+			risks[i] = actionrisk.Assessment{Level: actionrisk.Review, Notes: []string{fmt.Sprintf("could not read release notes: %v", err)}}
+			continue
+		}
+		risks[i] = actionrisk.Assessment{Level: actionrisk.Level(a.Level), Notes: a.Notes}
+	}
+}
+
+// checkProvenance compares how each npm or PyPI site's proposed release
+// was published against its current one. A changed build story (lost
+// attestation, different source repository, different npm publisher)
+// returns its note, which sends the bump to a review PR of its own.
+func checkProvenance(ctx context.Context, results []engine.SiteResult, client *provenance.Client) []string {
+	out := make([]string, len(results))
+	for i, r := range results {
+		kind := r.Site.Locator.Resolver
+		if r.Err != nil || !provenance.Supported(kind) || r.Latest == "" || len(r.Matches) == 0 || r.Latest == r.Matches[0].Value {
+			continue
+		}
+		v, err := client.Compare(ctx, kind, siteResolverName(r.Site), r.Matches[0].Value, r.Latest)
+		if err != nil || !v.Changed {
+			continue
+		}
+		out[i] = v.Note
 	}
 	return out
 }
