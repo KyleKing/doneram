@@ -166,9 +166,8 @@ owns a file does the resolving.
    runtimes, RDS/Aurora, EKS, ElastiCache, and OpenSearch versions in
    Terraform, CloudFormation/SAM, and Serverless files, and pinned GitHub
    REST API versions. Remaining: Terraform and Pulumi providers and modules;
-   versions in IaC with an end of life (Lambda runtimes, RDS/Aurora, EKS,
-   ElastiCache, OpenSearch); AMI IDs and SSM public parameters; API version
-   strings in code (Stripe, GitHub); and copier template drift.
+   AMI IDs and SSM public parameters; Stripe API versions, which publish no
+   machine-readable list; and copier template drift.
 
 ## Decisions this plan assumes
 
