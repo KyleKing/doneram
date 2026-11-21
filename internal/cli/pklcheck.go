@@ -537,6 +537,20 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 		summary.Lifecycle = lc
 	}
+	if run.extras() {
+		// Pins endoflife.date does not cover are judged by their own
+		// release history.
+		inferred := inferLifecycle(ctx, baseDir, results, lookup, now)
+		if len(inferred) > 0 {
+			if len(summary.Lifecycle) == 0 {
+				out.printf("\nEnd of life:\n")
+			}
+			for _, s := range inferred {
+				printLifecycle(out, s)
+			}
+			summary.Lifecycle = append(summary.Lifecycle, inferred...)
+		}
+	}
 	for _, h := range hardened {
 		patchedAny = patchedAny || h.Updated
 	}
