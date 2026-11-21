@@ -253,3 +253,79 @@ func TestRunSitesResolvesEachQuestionOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestRunSitesNeverProposesAnOlderVersion(t *testing.T) {
+	cases := []struct {
+		name       string
+		content    string
+		pattern    string
+		resolved   string
+		wantLatest string
+		wantBehind string
+	}{
+		{
+			// v0.6.0 and v0.6.1 both inside --min-age, so the newest release
+			// outside the window is 0.5.1, older than the pin.
+			name:       "cooldown leaves only an older release",
+			content:    `doneram@0.6.1#/Config.pkl`,
+			pattern:    `doneram@([\d.]+)#`,
+			resolved:   "0.5.1",
+			wantBehind: "0.5.1",
+		},
+		{
+			name:       "action pin compares its trailing tag",
+			content:    `checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`,
+			pattern:    `checkout@([0-9a-f]{40} # v[\d.]+)`,
+			resolved:   "11d5960a326750d5838078e36cf38b85af677262 # v4.4.0",
+			wantBehind: "11d5960a326750d5838078e36cf38b85af677262 # v4.4.0",
+		},
+		{
+			name:       "newer version still proposed",
+			content:    `jq = "1.7.1"`,
+			pattern:    `jq = "([\d.]+)"`,
+			resolved:   "1.7.2",
+			wantLatest: "1.7.2",
+		},
+		{
+			// alpine3.10 sorts below alpine3.9 as a string; a suffix-only
+			// difference must never be read as a downgrade.
+			name:       "suffix-only difference is not compared",
+			content:    `FROM golang:1.22-alpine3.9`,
+			pattern:    `golang:(\S+)`,
+			resolved:   "1.22-alpine3.10",
+			wantLatest: "1.22-alpine3.10",
+		},
+		{
+			name:       "branch SHA is not compared",
+			content:    `action@ffffffffffffffffffffffffffffffffffffffff # master`,
+			pattern:    `action@([0-9a-f]{40})`,
+			resolved:   "1111111111111111111111111111111111111111",
+			wantLatest: "1111111111111111111111111111111111111111",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "pin.txt")
+			if err := os.WriteFile(path, []byte(tc.content+"\n"), 0o644); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			sites := []Site{{
+				Tool:    "tool",
+				Locator: locator.Locator{Glob: path, Pattern: tc.pattern, Resolver: "mise"},
+			}}
+
+			results := RunSites(context.Background(), sites, lookupWith(&fakeResolver{version: tc.resolved}))
+
+			if results[0].Err != nil {
+				t.Fatalf("Err = %v", results[0].Err)
+			}
+			if results[0].Latest != tc.wantLatest {
+				t.Errorf("Latest = %q, want %q", results[0].Latest, tc.wantLatest)
+			}
+			if results[0].Behind != tc.wantBehind {
+				t.Errorf("Behind = %q, want %q", results[0].Behind, tc.wantBehind)
+			}
+		})
+	}
+}

@@ -7,11 +7,14 @@ package engine
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/parser"
 	"github.com/kyleking/doneram/internal/resolver"
+	"github.com/kyleking/doneram/pkg/version"
 )
 
 // Site pairs a Locator with what resolving its pin needs: which tool it
@@ -67,6 +70,11 @@ type SiteResult struct {
 	// Detail is extra report text a resolver.Detailer supplies alongside a
 	// resolved version, e.g. a branch-tracking SHA's drift and age.
 	Detail string
+	// Behind is the resolver's answer when it was older than the pin on
+	// disk, e.g. when --min-age held every release newer than the pin and
+	// the newest one outside the window predates it. Latest is left empty
+	// so the pin is never patched backwards.
+	Behind string
 }
 
 // ResolverLookup returns the resolver for a locator's Resolver kind, or
@@ -190,6 +198,14 @@ func (r *siteRunner) site(ctx context.Context, s Site) SiteResult {
 		result.Err = err
 		return result
 	}
+	current := ""
+	if len(matches) > 0 {
+		current = matches[0].Value
+	}
+	if isOlder(latest, current) {
+		result.Behind = latest
+		return result
+	}
 	result.Latest = latest
 
 	detailer, ok := res.(resolver.Detailer)
@@ -197,10 +213,6 @@ func (r *siteRunner) site(ctx context.Context, s Site) SiteResult {
 		return result
 	}
 
-	current := ""
-	if len(matches) > 0 {
-		current = matches[0].Value
-	}
 	detail, err := r.detailed.do(detailKey{key, current, latest}, func() (string, error) {
 		return detailer.Detail(ctx, s.resolverName(), current, latest)
 	})
@@ -209,4 +221,36 @@ func (r *siteRunner) site(ctx context.Context, s Site) SiteResult {
 	}
 
 	return result
+}
+
+// plainVersion matches a value that pkg/version compares faithfully: up to
+// three numeric segments, an optional leading v, and an optional suffix.
+// A SHA, a date, or a four-segment version is left uncompared.
+var plainVersion = regexp.MustCompile(`^v?\d+(\.\d+){0,2}(-\S+)?$`)
+
+// comparableVersion extracts the version from a pin value, reading the
+// trailing tag of a github-action "<sha> # v4.3.0" pin.
+func comparableVersion(value string) (string, bool) {
+	if i := strings.LastIndex(value, " # "); i != -1 {
+		value = value[i+len(" # "):]
+	}
+	return value, plainVersion.MatchString(value)
+}
+
+// isOlder reports whether latest is numerically below current. Only the
+// numeric segments are compared: suffixes like alpine3.9 and alpine3.10 do
+// not order as strings, and a wrong "older" verdict would silently block a
+// real update, so a pin that differs only in its suffix is never held back.
+func isOlder(latest, current string) bool {
+	l, ok := comparableVersion(latest)
+	if !ok {
+		return false
+	}
+	c, ok := comparableVersion(current)
+	if !ok {
+		return false
+	}
+	lv, cv := version.Parse(l), version.Parse(c)
+	lv.Suffix, cv.Suffix = "", ""
+	return version.Compare(lv, cv) < 0
 }

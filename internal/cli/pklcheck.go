@@ -56,6 +56,7 @@ type pklSiteSummary struct {
 	Tool            string `json:"tool"`
 	Current         string `json:"current,omitempty"`
 	Latest          string `json:"latest,omitempty"`
+	Behind          string `json:"behind,omitempty"`
 	Updated         bool   `json:"updated"`
 	needsUpdate     bool
 	Held            string           `json:"held,omitempty"`
@@ -331,6 +332,8 @@ func siteHeadline(result engine.SiteResult) string {
 		return fmt.Sprintf("✗ %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, mismatch)
 	case result.Err != nil:
 		return fmt.Sprintf("? %s (%s): %v", result.Site.Tool, result.Site.Locator.Glob, result.Err)
+	case result.Behind != "" && len(result.Matches) > 0:
+		return fmt.Sprintf("· %s: kept at %s, the newest eligible release (%s) is older", result.Site.Tool, result.Matches[0].Value, result.Behind)
 	case result.Latest == "" && len(result.Matches) > 0:
 		return fmt.Sprintf("· %s: held at %s, every newer release is inside --min-age", result.Site.Tool, result.Matches[0].Value)
 	case len(result.Matches) > 0 && result.Latest != result.Matches[0].Value:
@@ -393,6 +396,7 @@ func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSumma
 	s := pklSiteSummary{
 		Tool:           result.Site.Tool,
 		Latest:         result.Latest,
+		Behind:         result.Behind,
 		Detail:         result.Detail,
 		PatchedVersion: vuln.PatchedVersion,
 		HeldVulnerable: vuln.HeldVulnerable,

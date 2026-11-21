@@ -226,3 +226,26 @@ func TestSummarizeSite_NoVulnerabilitiesLeavesFieldsEmpty(t *testing.T) {
 		t.Errorf("summary = %+v, want zero-value vulnerability fields for a non-vulnerable site", summary)
 	}
 }
+
+func TestBehindSiteIsReportedAndNeverPatched(t *testing.T) {
+	result := engine.SiteResult{
+		Site: engine.Site{
+			Tool:    "doneram-schema",
+			Locator: locator.Locator{Glob: ".doneram.pkl", Resolver: "github-release"},
+		},
+		Matches: []locator.Match{{Value: "0.6.1"}},
+		Behind:  "0.5.1",
+	}
+
+	if siteNeedsPatch(result) {
+		t.Error("siteNeedsPatch = true, want a pin newer than the resolved release left alone")
+	}
+	want := "· doneram-schema: kept at 0.6.1, the newest eligible release (0.5.1) is older"
+	if got := siteHeadline(result); got != want {
+		t.Errorf("siteHeadline = %q, want %q", got, want)
+	}
+	summary := summarizeSite(result, vulncheck.Result{})
+	if summary.Behind != "0.5.1" || summary.Latest != "" || summary.Compare != "" {
+		t.Errorf("summary = %+v, want behind 0.5.1 with no latest or compare link", summary)
+	}
+}
