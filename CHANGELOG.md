@@ -1,3 +1,9 @@
+## v0.22.0 (2026-11-21)
+
+### Feat
+
+- infer end of life from release history when endoflife.date has no entry (#18)
+
 ## v0.21.0 (2026-11-21)
 
 ### Feat
