@@ -1,3 +1,9 @@
+## v0.10.0 (2026-11-21)
+
+### Feat
+
+- submit pins to GitHub's dependency graph (#6)
+
 ## v0.9.0 (2026-11-21)
 
 ### Feat
