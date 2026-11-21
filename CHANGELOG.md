@@ -1,3 +1,9 @@
+## v0.8.0 (2026-11-21)
+
+### Feat
+
+- distinct exit codes and a --fail-on-vuln CVE gate (#4)
+
 ## v0.7.0 (2026-11-21)
 
 ### Feat
