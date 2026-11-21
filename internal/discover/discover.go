@@ -1,7 +1,7 @@
 // Package discover finds the pins a repo carries in well-known shapes, so
 // they are checked without a line of config: SHA-pinned GitHub Actions in
-// workflows and composite actions, and tool versions in mise.toml and
-// .tool-versions. Config sites always win; a discovered site whose lines a
+// workflows and composite actions, tool versions in mise.toml and
+// .tool-versions, and Terraform provider and module versions. Config sites always win; a discovered site whose lines a
 // config site already covers is dropped.
 package discover
 
@@ -46,7 +46,11 @@ func Sites(baseDir string) ([]engine.Site, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(actions, tools...), nil
+	terraform, err := terraformSites(baseDir)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(actions, tools...), terraform...), nil
 }
 
 func actionSites(baseDir string) ([]engine.Site, error) {

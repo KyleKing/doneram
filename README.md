@@ -98,6 +98,30 @@ Most pins need no config. doneram finds and checks these on its own:
 - Plain versions under `[tools]` in `mise.toml`, and in `.tool-versions`.
   `latest`, `lts`, and arrays are not pins and are skipped.
 
+### Terraform
+
+Provider versions in `required_providers` and registry module versions are
+pins too. An exact version (`"5.1.2"`) moves to the newest release; a
+pessimistic constraint (`"~> 5.0"`) stays inside the range it names while
+its floor rises at the precision it was written (`~> 5.0` to `~> 5.51`).
+Open ranges (`">= 4.0"`), local paths, and git sources are left alone, and
+a major goes to a review PR, since it usually comes with an upgrade guide.
+`.terraform.lock.hcl` is Terraform's to rewrite: set `afterPatch = "terraform
+init -upgrade -backend=false"` to have it follow.
+
+### Copier templates
+
+A project generated from a [copier](https://copier.readthedocs.io) template
+is pinned to a template release by `_commit` in `.copier-answers.yml`.
+doneram reads it (and `.copier-answers.*.yml` beside it or one directory
+down), finds the template repository's newest release on GitHub, and on
+`update` runs `copier update --defaults --skip-answered --vcs-ref <tag>`,
+which re-renders the template and merges it with local edits. That runs
+before any pin is checked, so pins the template writes are checked in the
+same run. `--trust` is never passed: a template whose update runs tasks
+fails, and the report gives the command to run by hand. Conflicts are left
+as markers or `.rej` files for the PR's reviewer.
+
 ### Pinning floating references
 
 A tag or version prefix can point at new code without a commit in your

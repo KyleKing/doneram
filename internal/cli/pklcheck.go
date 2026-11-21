@@ -68,6 +68,9 @@ type pklSummary struct {
 	// Manifests holds the projects whose locks were upgraded within their
 	// declared ranges and whose declared floors were raised to match.
 	Manifests []pklManifestSummary `json:"manifests,omitempty"`
+	// Templates holds projects behind their copier template's newest
+	// release, updated with `copier update` when the run applies.
+	Templates []pklTemplateSummary `json:"templates,omitempty"`
 	// Groups splits the changes into one pull request each; see pklGroup.
 	Groups []pklGroup `json:"groups,omitempty"`
 	// Validation is the output of a validate failure no single bump
@@ -156,6 +159,9 @@ type pklRun struct {
 	eol *eol.Client
 	// osv overrides the OSV client, nil meaning the public API.
 	osv *osv.Client
+	// templateReleases overrides how a copier template's newest release is
+	// found, nil meaning GitHub releases.
+	templateReleases resolver.Resolver
 	// pin overrides how floating references are pinned, nil meaning the
 	// GitHub API and mise.
 	pin harden.Resolver
@@ -225,6 +231,18 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		if err != nil {
 			return fmt.Errorf("pinning floating references: %w", err)
 		}
+	}
+
+	// A template update comes first: it can rewrite pins, and those are
+	// then checked like any other.
+	var templates []pklTemplateSummary
+	var templateFailures int
+	if cfg.DiscoverEnabled() && run.extras() {
+		releases := run.templateReleases
+		if releases == nil {
+			releases = resolver.NewGitHubReleaseResolver(httpclient.New(httpclient.DefaultConfig()))
+		}
+		templates, templateFailures = checkTemplates(ctx, out, baseDir, apply, releases)
 	}
 
 	all := cfg.Sites(baseDir)
@@ -454,6 +472,11 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		hardenFailures += n
 	}
 	summary.Hardened = hardened
+	summary.Templates = templates
+	patchFailures += templateFailures
+	for _, t := range templates {
+		patchedAny = patchedAny || t.Updated
+	}
 	unresolved += hardenFailures
 
 	if cfg.DiscoverEnabled() && run.extras() {
@@ -861,7 +884,12 @@ func finishSummary(summary *pklSummary) {
 		rows = append(rows, s)
 	}
 
-	lockFixes, pinned, relocked := 0, 0, 0
+	lockFixes, pinned, relocked, rerendered := 0, 0, 0, 0
+	for _, t := range summary.Templates {
+		if t.Updated {
+			rerendered++
+		}
+	}
 	for _, m := range summary.Manifests {
 		if m.Changed {
 			relocked++
@@ -878,7 +906,7 @@ func finishSummary(summary *pklSummary) {
 		}
 	}
 
-	summary.HasUpgrades = len(rows)+lockFixes+pinned+relocked > 0
+	summary.HasUpgrades = len(rows)+lockFixes+pinned+relocked+rerendered > 0
 	if !summary.HasUpgrades {
 		summary.Title = "chore: no pin updates available"
 		summary.Body = "doneram found no pins to update."
@@ -900,6 +928,8 @@ func finishSummary(summary *pklSummary) {
 	}
 
 	switch {
+	case len(rows) == 0 && lockFixes == 0 && pinned == 0 && relocked == 0:
+		summary.Title = fmt.Sprintf("chore: update %d copier template(s)", rerendered)
 	case len(rows) == 0 && lockFixes == 0 && pinned == 0:
 		summary.Title = fmt.Sprintf("chore: upgrade dependencies within declared ranges in %d project(s)", relocked)
 	case len(rows) == 0 && lockFixes == 0:
@@ -918,6 +948,7 @@ func finishSummary(summary *pklSummary) {
 		"Rows marked *ahead of --min-age* take the minimum fixed release before the cooldown would have offered it.", security)
 	writeSection(&body, "Needs review", "Majors whose release notes or interface change touch something this repo uses, new majors outside a declared dependency range, and releases whose provenance changed.", review)
 	writeLockSection(&body, summary.Lockfiles)
+	writeTemplateSection(&body, summary.Templates)
 	writeManifestSection(&body, summary.Manifests)
 	writeHardenSection(&body, summary.Hardened)
 	writeLifecycleSection(&body, summary.Lifecycle)
