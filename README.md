@@ -198,6 +198,7 @@ doneram check --config path/to/.doneram.pkl
 doneram check --only jq --only hk
 doneram check --format json
 doneram check --fail-on-drift
+doneram check --fail-on-vuln
 doneram check --min-age 0
 
 # Patch in place
@@ -238,6 +239,24 @@ request, so routine updates stay a quick read.
 Drift is the only soft outcome. A site that fails to resolve, matches the
 wrong number of times, or fails to patch exits non-zero,
 because a pin nobody checked looks exactly like a pin that is current.
+
+The exit code says which kind of problem a run hit, so a workflow can retry
+a flaky registry but stop on a broken config. When several apply, the first
+in this table wins.
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Every site checked; nothing gated failed |
+| 2 | Config could not be loaded, or `--only` names an unknown tool |
+| 5 | A file could not be patched |
+| 3 | A pattern matched a different number of times than it expects |
+| 4 | A resolver could not answer (registry or network), worth a retry |
+| 7 | `--fail-on-vuln` and a pin with a known advisory is still on disk |
+| 6 | `--fail-on-drift` and a pin is out of date |
+
+`--fail-on-vuln` is the CVE gate: run `update --fail-on-vuln` and a
+vulnerable pin that doneram could fix is patched and passes, while one held
+below its fix by a ceiling fails the job.
 
 ## Update policy
 

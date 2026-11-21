@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -71,6 +72,39 @@ func TestRunCheckPklFailOnDrift(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "out of date") {
 		t.Errorf("err = %v, want it to name the drift", err)
+	}
+	var exit *ExitError
+	if !errors.As(err, &exit) || exit.Code != ExitDrift {
+		t.Errorf("err = %#v, want exit code %d", err, ExitDrift)
+	}
+}
+
+func TestRunCheckPklExitCodes(t *testing.T) {
+	t.Setenv("GITHUB_OUTPUT", "")
+	dir := t.TempDir()
+
+	err := runCheckPkl(context.Background(), pklRun{path: filepath.Join(dir, "missing.pkl"), format: "json"})
+	var exit *ExitError
+	if !errors.As(err, &exit) || exit.Code != ExitConfig {
+		t.Errorf("missing config: err = %v, want exit code %d", err, ExitConfig)
+	}
+
+	err = runCheckPkl(context.Background(), pklRun{path: driftConfig(t), format: "json", only: []string{"nope"}})
+	if !errors.As(err, &exit) || exit.Code != ExitConfig {
+		t.Errorf("unknown --only: err = %v, want exit code %d", err, ExitConfig)
+	}
+}
+
+func TestCountVulnerable(t *testing.T) {
+	vuln := []pklVulnSummary{{ID: "GHSA-x"}}
+	summary := pklSummary{Results: []pklSiteSummary{
+		{Tool: "a", Vulnerabilities: vuln},
+		{Tool: "b", Vulnerabilities: vuln, Updated: true, Security: true},
+		{Tool: "c", Vulnerabilities: vuln, Updated: true},
+		{Tool: "d"},
+	}}
+	if n := countVulnerable(summary); n != 2 {
+		t.Errorf("countVulnerable = %d, want 2 (a unpatched, c updated without clearing)", n)
 	}
 }
 
