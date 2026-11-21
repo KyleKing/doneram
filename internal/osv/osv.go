@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/pkg/version"
@@ -60,19 +61,58 @@ var unversionedEcosystems = map[string]bool{
 	"GitHub Actions": true,
 }
 
-// MinimumFix returns the smallest fixed version across advisories that is
-// greater than current, or "" when no advisory names a fix above current.
+// MinimumFix returns the smallest version above current that clears every
+// advisory with a fix, or "" when none names a fix above current. Each
+// advisory needs at least the fix closing the range current sits in, the
+// answer is the largest of those, and a candidate that lands inside a later
+// range of any advisory moves on to that range's fix. An advisory with no
+// fix at all cannot be cleared by any version and is left out.
 func MinimumFix(advisories []Advisory, current string) string {
-	var min string
-	currentVer := version.Parse(current)
+	cur := version.Parse(current)
+	var best string
 	for _, a := range advisories {
-		for _, fixed := range a.Fixed {
-			if version.Compare(version.Parse(fixed), currentVer) <= 0 {
+		need := a.fixFor(cur)
+		if need != "" && (best == "" || version.Compare(version.Parse(need), version.Parse(best)) > 0) {
+			best = need
+		}
+	}
+	// Each pass moves best strictly upward to a published fix, so the loop
+	// ends after at most one step per range.
+	for moved := best != ""; moved; {
+		moved = false
+		for _, a := range advisories {
+			if !a.affects(best) {
 				continue
 			}
-			if min == "" || version.Compare(version.Parse(fixed), version.Parse(min)) < 0 {
-				min = fixed
+			if next := a.fixFor(version.Parse(best)); next != "" && version.Compare(version.Parse(next), version.Parse(best)) > 0 {
+				best, moved = next, true
 			}
+		}
+	}
+	return best
+}
+
+// fixFor is the fix that closes the range v sits in, falling back to the
+// smallest fix above v when the ranges are not known.
+func (a Advisory) fixFor(v *version.Version) string {
+	for _, r := range a.ranges {
+		if r.fixed == "" {
+			continue
+		}
+		if r.introduced != "" && r.introduced != "0" && version.Compare(v, version.Parse(r.introduced)) < 0 {
+			continue
+		}
+		if version.Compare(v, version.Parse(r.fixed)) < 0 {
+			return r.fixed
+		}
+	}
+	var min string
+	for _, fixed := range a.Fixed {
+		if version.Compare(version.Parse(fixed), v) <= 0 {
+			continue
+		}
+		if min == "" || version.Compare(version.Parse(fixed), version.Parse(min)) < 0 {
+			min = fixed
 		}
 	}
 	return min
@@ -137,16 +177,7 @@ func (c *Client) Query(ctx context.Context, queries []Query) ([][]Advisory, erro
 		}
 	}
 
-	logger := httpclient.LoggerFromContext(ctx)
-	records := make(map[string]vulnRecord, len(uniqueIDs))
-	for id := range uniqueIDs {
-		rec, err := c.fetchVuln(ctx, id)
-		if err != nil {
-			logger.Warn("failed to fetch OSV advisory, skipping", "id", id, "error", err)
-			continue
-		}
-		records[id] = rec
-	}
+	records := c.fetchVulns(ctx, uniqueIDs)
 
 	out := make([][]Advisory, len(queries))
 	for i, q := range queries {
@@ -155,7 +186,7 @@ func (c *Client) Query(ctx context.Context, queries []Query) ([][]Advisory, erro
 			if !ok {
 				continue
 			}
-			advisory := rec.toAdvisory(q.Ecosystem)
+			advisory := rec.toAdvisory(q.Package, q.Ecosystem)
 			if unversionedEcosystems[q.Ecosystem] && !advisory.affects(q.Version) {
 				continue
 			}
@@ -165,7 +196,59 @@ func (c *Client) Query(ctx context.Context, queries []Query) ([][]Advisory, erro
 	return out, nil
 }
 
+// maxBatch is OSV's limit on queries per /v1/querybatch request.
+const maxBatch = 1000
+
+// fetchWorkers bounds how many advisory records are fetched at once. A
+// lockfile with dozens of findings would otherwise pay one round trip each
+// in sequence.
+const fetchWorkers = 8
+
+// fetchVulns fetches every advisory record in ids concurrently. A record
+// that fails is logged and left out, so one bad fetch drops one advisory
+// rather than the whole report.
+func (c *Client) fetchVulns(ctx context.Context, ids map[string]struct{}) map[string]vulnRecord {
+	logger := httpclient.LoggerFromContext(ctx)
+	records := make(map[string]vulnRecord, len(ids))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, fetchWorkers)
+	for id := range ids {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			rec, err := c.fetchVuln(ctx, id)
+			if err != nil {
+				logger.Warn("failed to fetch OSV advisory, skipping", "id", id, "error", err)
+				return
+			}
+			mu.Lock()
+			records[id] = rec
+			mu.Unlock()
+		}(id)
+	}
+	wg.Wait()
+	return records
+}
+
+// batchQuery splits queries into requests OSV accepts and concatenates
+// their answers in order.
 func (c *Client) batchQuery(ctx context.Context, queries []Query) ([][]string, error) {
+	out := make([][]string, 0, len(queries))
+	for start := 0; start < len(queries); start += maxBatch {
+		end := min(start+maxBatch, len(queries))
+		ids, err := c.batchQueryChunk(ctx, queries[start:end])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ids...)
+	}
+	return out, nil
+}
+
+func (c *Client) batchQueryChunk(ctx context.Context, queries []Query) ([][]string, error) {
 	logger := httpclient.LoggerFromContext(ctx)
 	logger.Debug("querying OSV", "resolver", "osv", "count", len(queries))
 
@@ -229,6 +312,7 @@ type vulnRange struct {
 
 type vulnAffected struct {
 	Package struct {
+		Name      string `json:"name"`
 		Ecosystem string `json:"ecosystem"`
 	} `json:"package"`
 	Ranges []vulnRange `json:"ranges"`
@@ -254,18 +338,29 @@ type vulnRecord struct {
 	Affected []vulnAffected `json:"affected"`
 }
 
-// toAdvisory trims a full OSV record to the ecosystem a query asked about,
-// since one advisory often covers several distro releases with different
-// fixed versions each.
-func (r vulnRecord) toAdvisory(ecosystem string) Advisory {
+// toAdvisory trims a full OSV record to the package and ecosystem a query
+// asked about, since one advisory often covers several distro releases, or
+// several packages of one ecosystem, with different fixed versions each.
+// When no affected entry names the package (a name spelled differently),
+// every entry of the ecosystem counts, as before.
+func (r vulnRecord) toAdvisory(pkg, ecosystem string) Advisory {
 	a := Advisory{
 		ID:       r.ID,
 		Summary:  r.Summary,
 		Severity: r.severity(),
 		URL:      r.url(),
 	}
+	named := false
+	for _, affected := range r.Affected {
+		if affected.Package.Ecosystem == ecosystem && strings.EqualFold(affected.Package.Name, pkg) {
+			named = true
+		}
+	}
 	for _, affected := range r.Affected {
 		if affected.Package.Ecosystem != ecosystem {
+			continue
+		}
+		if named && !strings.EqualFold(affected.Package.Name, pkg) {
 			continue
 		}
 		for _, rng := range affected.Ranges {

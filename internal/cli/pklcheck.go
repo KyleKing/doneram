@@ -52,6 +52,9 @@ type pklSummary struct {
 	Title       string           `json:"title"`
 	Body        string           `json:"body"`
 	Results     []pklSiteSummary `json:"results"`
+	// Lockfiles holds the vulnerable packages lockfiles resolve, raised
+	// in place when the run applies.
+	Lockfiles []pklLockSummary `json:"lockfiles,omitempty"`
 }
 
 type pklSiteSummary struct {
@@ -129,6 +132,8 @@ type pklRun struct {
 	snapshot string
 	// eol overrides the endoflife.date client, nil meaning the public API.
 	eol *eol.Client
+	// osv overrides the OSV client, nil meaning the public API.
+	osv *osv.Client
 }
 
 // report is the running commentary. The json format keeps stdout clean for
@@ -183,14 +188,36 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	if err != nil {
 		return &ExitError{Code: ExitConfig, Err: err}
 	}
-	if len(sites) == 0 {
+
+	httpClient := httpclient.New(httpclient.DefaultConfig())
+	osvClient := run.osv
+	if osvClient == nil {
+		osvClient = osv.New(httpClient)
+	}
+
+	// Lockfiles are scanned whole or not at all, so a run narrowed to some
+	// tools with --only leaves them out.
+	var locks []pklLockSummary
+	var lockErrors int
+	if cfg.LockfilesEnabled() && len(run.only) == 0 {
+		locks, err = scanLockfiles(ctx, baseDir, osvClient)
+		if err != nil {
+			out.printf("? lockfiles: %v\n", err)
+			lockErrors++
+		}
+	}
+	if len(sites) == 0 && len(locks) == 0 {
 		out.printf("%s declares no tools and has no discoverable pins\n", path)
 		summary := pklSummary{Results: []pklSiteSummary{}}
 		finishSummary(&summary)
-		return run.emit(summary, outputPath)
+		if err := run.emit(summary, outputPath); err != nil {
+			return err
+		}
+		if lockErrors > 0 {
+			return exitf(ExitUnresolved, "lockfile scan failed")
+		}
+		return nil
 	}
-
-	httpClient := httpclient.New(httpclient.DefaultConfig())
 	registry := resolver.Registry(httpClient)
 	lookup := func(kind string) (resolver.Resolver, bool) {
 		r, ok := registry[kind]
@@ -206,7 +233,6 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 	}
 
-	osvClient := osv.New(httpClient)
 	scanner, _ := vulnscan.Detect()
 	vulnResults := vulncheck.Check(ctx, results, osvClient, scanner)
 	security := applySecurityFixes(ctx, results, vulnResults, lookup)
@@ -295,6 +321,18 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	}
 	out.printf("\nChecked %d site(s) across %d tool(s)\n", len(results), len(tools))
 
+	reportLockFindings(out, locks)
+	if apply {
+		if n := applyLockFixes(ctx, out, locks); n > 0 {
+			patchFailures += n
+		}
+		for _, l := range locks {
+			patchedAny = patchedAny || l.Updated
+		}
+	}
+	summary.Lockfiles = locks
+	unresolved += lockErrors
+
 	if patchedAny && cfg.AfterPatch != "" {
 		if err := runAfterPatch(ctx, out, cfg.AfterPatch, baseDir); err != nil {
 			return fmt.Errorf("afterPatch %q: %w", cfg.AfterPatch, err)
@@ -336,6 +374,16 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 // countVulnerable counts sites whose pin on disk still has an advisory: a
 // security fix proposed but not applied leaves the old version in place.
 func countVulnerable(summary pklSummary) int {
+	n := 0
+	for _, l := range summary.Lockfiles {
+		if !l.Updated {
+			n++
+		}
+	}
+	return n + countVulnerableSites(summary)
+}
+
+func countVulnerableSites(summary pklSummary) int {
 	var n int
 	for _, s := range summary.Results {
 		if len(s.Vulnerabilities) > 0 && (!s.Updated || !s.Security) {
@@ -627,7 +675,14 @@ func finishSummary(summary *pklSummary) {
 		rows = append(rows, s)
 	}
 
-	summary.HasUpgrades = len(rows) > 0
+	lockFixes := 0
+	for _, l := range summary.Lockfiles {
+		if l.Updated {
+			lockFixes++
+		}
+	}
+
+	summary.HasUpgrades = len(rows)+lockFixes > 0
 	if !summary.HasUpgrades {
 		summary.Title = "chore: no pin updates available"
 		summary.Body = "doneram found no pins to update."
@@ -646,9 +701,12 @@ func finishSummary(summary *pklSummary) {
 		}
 	}
 
-	if len(security) > 0 {
-		summary.Title = fmt.Sprintf("fix: update %d pin(s), %d clearing advisories", len(rows), len(security))
-	} else {
+	switch {
+	case len(rows) == 0:
+		summary.Title = fmt.Sprintf("fix: raise %d locked package(s) clearing advisories", lockFixes)
+	case len(security)+lockFixes > 0:
+		summary.Title = fmt.Sprintf("fix: update %d pin(s), %d clearing advisories", len(rows)+lockFixes, len(security)+lockFixes)
+	default:
 		summary.Title = fmt.Sprintf("chore: update %d pin(s)", len(rows))
 	}
 
@@ -657,6 +715,7 @@ func finishSummary(summary *pklSummary) {
 	writeSection(&body, "Security fixes", "Each moves a pin with a published advisory to a release that clears it. "+
 		"Rows marked *ahead of --min-age* take the minimum fixed release before the cooldown would have offered it.", security)
 	writeSection(&body, "Needs review", "Major action bumps that change something this repo's workflows use.", review)
+	writeLockSection(&body, summary.Lockfiles)
 	writeSection(&body, "Updates", "", routine)
 	summary.Body = body.String()
 }

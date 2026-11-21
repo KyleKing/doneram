@@ -88,9 +88,18 @@ func TestMinimumFix(t *testing.T) {
 		{ID: "b", Fixed: []string{"1.2.0", "1.3.0"}},
 	}
 
+	// Clearing both needs a's 1.5.0, not b's smaller 1.2.0.
 	got := MinimumFix(advisories, "1.0.0")
-	if got != "1.2.0" {
-		t.Errorf("MinimumFix() = %q, want 1.2.0", got)
+	if got != "1.5.0" {
+		t.Errorf("MinimumFix() = %q, want 1.5.0", got)
+	}
+
+	// 1.5.0 sits inside c's second range, so the answer moves on to 1.6.0.
+	ranged := append(advisories, Advisory{ID: "c", Fixed: []string{"1.1.0", "1.6.0"}, ranges: []interval{
+		{introduced: "0", fixed: "1.1.0"}, {introduced: "1.4.0", fixed: "1.6.0"},
+	}})
+	if got := MinimumFix(ranged, "1.0.0"); got != "1.6.0" {
+		t.Errorf("MinimumFix() across ranges = %q, want 1.6.0", got)
 	}
 
 	if got := MinimumFix(advisories, "2.0.0"); got != "" {
