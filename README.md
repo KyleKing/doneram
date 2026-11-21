@@ -268,6 +268,40 @@ moves with what the resolver actually says is installable. An entry the
 command reports without a newer version is up to date, so make the latest
 group optional in the pattern.
 
+### Cloud-published versions
+
+Some pins only a cloud provider can answer: the newest AMI, the GKE
+versions a release channel offers. doneram asks the provider's own CLI
+(`aws`, `gcloud`) with whatever credentials, profile, and region it already
+has, and only reads. Where the CLI is missing or has no credentials, the
+site is reported as skipped and the run still passes, so the same config
+works on a laptop with a login and in CI without one.
+
+| Resolver | `resolverName` | Answers with |
+| --- | --- | --- |
+| `aws-ssm` | an SSM parameter, e.g. `/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64`, optionally `@<region>` | the parameter's value |
+| `aws-ami` | `<owner>/<name pattern>`, e.g. `amazon/al2023-ami-2023.*-x86_64`, optionally `@<region>` | the newest available AMI ID by creation date |
+| `gke` | `<location>/<CHANNEL>`, e.g. `us-central1/REGULAR`, or just `<location>`, optionally `@<project>` | the newest version the channel (or location) offers that matches the pattern |
+
+```pkl
+["base-ami"] {
+  resolver = "aws-ssm"
+  resolverName = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64@us-east-1"
+  sites { new { file = "infra/main.tf"; pattern = #"ami\s*=\s*"(ami-[0-9a-f]+)""# } }
+}
+```
+
+AWS publishes the newest Amazon Linux, Bottlerocket, Windows, and EKS
+optimized AMIs as public SSM parameters under `/aws/service/`, so
+`aws-ssm` tracks what AWS itself calls latest; `aws-ami` covers an image no
+parameter tracks, such as a vendor's or your own Packer build (owner
+`self`). An AMI ID is per region, so name the region the pin is for.
+
+Private images in ECR (`<account>.dkr.ecr.<region>.amazonaws.com`) and
+Artifact Registry (`*-docker.pkg.dev`, `gcr.io`) are pinned to digests like
+any other image, logging in with `aws ecr get-login-password` or `gcloud
+auth print-access-token`. A public Artifact Registry image needs no login.
+
 ### Pins that track a branch
 
 A version compares as a version. A commit SHA does not, so a pin tracking a

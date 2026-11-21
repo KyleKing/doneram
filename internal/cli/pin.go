@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/kyleking/doneram/internal/cloud"
 	"github.com/kyleking/doneram/internal/digest"
 	"github.com/kyleking/doneram/internal/harden"
 	"github.com/kyleking/doneram/internal/httpclient"
@@ -28,6 +30,7 @@ type pklHardenSummary struct {
 	Pinned  string `json:"pinned,omitempty"`
 	Updated bool   `json:"updated"`
 	Error   string `json:"error,omitempty"`
+	Skipped string `json:"skipped,omitempty"`
 }
 
 func newPinCommand() *cli.Command {
@@ -179,6 +182,11 @@ func summarizeHardening(out report, baseDir string, findings []harden.Finding, f
 		}
 		s := pklHardenSummary{Kind: string(f.Kind), File: filepath.ToSlash(rel), Line: f.Line, Name: f.Name, Ref: f.Ref}
 		switch {
+		case errors.Is(f.Err, cloud.ErrUnavailable):
+			// A private cloud registry with no CLI or login here is
+			// skipped, as a cloud-backed site is.
+			s.Skipped = f.Err.Error()
+			out.printf("· %s:%d %s: skipped, %v\n", s.File, s.Line, label(f), f.Err)
 		case f.Err != nil:
 			s.Error = f.Err.Error()
 			failures++

@@ -21,17 +21,13 @@ on workflow runs) belongs to other tools.
 
 ## Next
 
-1. **Cloud-published versions, read-only.** A pin whose newest version
-   only the cloud provider knows, resolved with the SDK's default
-   credentials and skipped with a note when there are none. doneram never
-   writes to the account.
-   - AWS: AMI IDs in Terraform, CloudFormation, and Packer (EC2
-     `DescribeImages` by name and owner, or the public SSM parameters under
-     `/aws/service/`), digests for private ECR images, and end of life
-     from the provider itself (RDS and Aurora engine versions, EKS add-on
-     versions per cluster version) in place of endoflife.date.
-   - Google Cloud: GKE versions per release channel, Cloud SQL database
-     versions, and Artifact Registry digests.
+1. **More cloud-published versions.** `aws-ssm`, `aws-ami`, `gke`, and
+   ECR and Artifact Registry digests shipped, read-only through the
+   provider's own CLI. Candidates if a real pin needs them: Cloud SQL
+   database versions, and end-of-life dates read from AWS itself
+   (`rds describe-db-major-engine-versions`, `eks describe-cluster-versions`)
+   in place of endoflife.date, which already tracks the same published
+   dates for RDS, Aurora, and EKS.
 2. **Pre-release patterns.** `^` for release candidates, `&` for betas,
    `!` for alphas, documented in the README and not yet parsed.
 

@@ -50,7 +50,9 @@ class Tool {
   /// Registry the version resolves through. `mise` covers any tool in its
   /// registry; the rest name the registry directly (`docker`, `ghcr`,
   /// `npm`, `pypi`, `cargo`, `composer`, `rubygems`, `apk`, `apt`, `yum`,
-  /// `github-release`, `github-branch`, `github-action`, `cdnjs`).
+  /// `github-release`, `github-branch`, `github-action`, `cdnjs`,
+  /// `terraform-provider`, `terraform-module`), or a cloud provider's CLI
+  /// (`aws-ssm`, `aws-ami`, `gke`), skipped where it has no credentials.
   resolver: String = "mise"
   /// Name to query when it differs from the map key, e.g.
   /// "owner/repo" or "pipx:commitizen".

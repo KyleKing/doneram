@@ -29,5 +29,9 @@ func Registry(client *http.Client) map[string]Resolver {
 
 		"terraform-provider": NewTerraformProviderResolver(client),
 		"terraform-module":   NewTerraformModuleResolver(client),
+
+		"aws-ssm": NewAWSSSMResolver(),
+		"aws-ami": NewAWSAMIResolver(),
+		"gke":     NewGKEResolver(),
 	}
 }
