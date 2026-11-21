@@ -107,7 +107,7 @@ func groupSummary(summary pklSummary, g pklGroup) pklSummary {
 		}
 	}
 	if g.Extras {
-		sub.Lockfiles, sub.Hardened, sub.Lifecycle, sub.Manifests = summary.Lockfiles, summary.Hardened, summary.Lifecycle, summary.Manifests
+		sub.Lockfiles, sub.Hardened, sub.Lifecycle, sub.Manifests, sub.Templates = summary.Lockfiles, summary.Hardened, summary.Lifecycle, summary.Manifests, summary.Templates
 	}
 	return sub
 }

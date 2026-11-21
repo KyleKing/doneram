@@ -165,9 +165,10 @@ owns a file does the resolving.
 9. **IaC and other toil.** Shipped so far: end of life for Lambda
    runtimes, RDS/Aurora, EKS, ElastiCache, and OpenSearch versions in
    Terraform, CloudFormation/SAM, and Serverless files, and pinned GitHub
-   REST API versions. Remaining: Terraform and Pulumi providers and modules;
-   AMI IDs and SSM public parameters; Stripe API versions, which publish no
-   machine-readable list; and copier template drift.
+   REST API versions. Then Terraform provider and module pins
+   (exact and `~>` forms) and copier template drift, applied by `copier
+   update`. Remaining: Pulumi, AMI IDs and SSM public parameters, and Stripe
+   API versions, which publish no machine-readable list.
 
 ## Decisions this plan assumes
 

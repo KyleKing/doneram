@@ -54,11 +54,17 @@ func assessRisks(ctx context.Context, results []engine.SiteResult, client *actio
 func assessLibraryRisks(ctx context.Context, results []engine.SiteResult, risks []actionrisk.Assessment, client *changelog.Client, repoDir string) {
 	for i, r := range results {
 		kind := r.Site.Locator.Resolver
-		if r.Err != nil || !changelog.Supported(kind) || r.Latest == "" || len(r.Matches) == 0 || risks[i].Level != "" {
+		if r.Err != nil || r.Latest == "" || len(r.Matches) == 0 || risks[i].Level != "" || !changelog.IsMajor(r.Matches[0].Value, r.Latest) {
 			continue
 		}
 		from := r.Matches[0].Value
-		if !changelog.IsMajor(from, r.Latest) {
+		if kind == "terraform-provider" || kind == "terraform-module" {
+			// Registry release notes are free text with no stable home, and
+			// a major usually ships an upgrade guide that needs reading.
+			risks[i] = actionrisk.Assessment{Level: actionrisk.Review, Notes: []string{fmt.Sprintf("%s %s → %s crosses a major; read its upgrade guide", siteResolverName(r.Site), from, r.Latest)}}
+			continue
+		}
+		if !changelog.Supported(kind) {
 			continue
 		}
 		a, err := client.Assess(ctx, kind, siteResolverName(r.Site), from, r.Latest, repoDir)

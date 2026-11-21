@@ -23,5 +23,8 @@ func Registry(client *http.Client) map[string]Resolver {
 		"github-branch":  NewGitHubBranchResolver(client),
 		"github-action":  NewGitHubActionResolver(client),
 		"cdnjs":          NewCDNJSResolver(client),
+
+		"terraform-provider": NewTerraformProviderResolver(client),
+		"terraform-module":   NewTerraformModuleResolver(client),
 	}
 }
