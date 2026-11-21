@@ -2,7 +2,6 @@ package resolver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -15,6 +14,7 @@ import (
 type CargoResolver struct {
 	client  *http.Client
 	baseURL string
+	docs    docCache
 }
 
 func NewCargoResolver(client *http.Client) *CargoResolver {
@@ -44,33 +44,23 @@ type cargoVersion struct {
 	Yanked bool   `json:"yanked"`
 }
 
+func (r *CargoResolver) fetch(ctx context.Context, crate string) (cargoResponse, error) {
+	header := http.Header{"User-Agent": []string{"doneram/1.0"}}
+	body, err := r.docs.get(ctx, r.client, fmt.Sprintf("%s/api/v1/crates/%s/versions", r.baseURL, crate), "crates.io", "crate "+crate, header)
+	if err != nil {
+		httpclient.LoggerFromContext(ctx).Warn("failed to fetch crates.io data", "crate", crate, "error", err)
+		return cargoResponse{}, err
+	}
+	return decodeDoc[cargoResponse](body, "crates.io")
+}
+
 func (r *CargoResolver) Resolve(ctx context.Context, crate string, pattern *parser.VersionPattern) (string, error) {
 	logger := httpclient.LoggerFromContext(ctx)
 	logger.Debug("resolving crate", "resolver", "cargo", "crate", crate)
 
-	url := fmt.Sprintf("%s/api/v1/crates/%s/versions", r.baseURL, crate)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	data, err := r.fetch(ctx, crate)
 	if err != nil {
-		return "", fmt.Errorf("creating request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", "doneram/1.0")
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		logger.Warn("failed to fetch crates.io data", "crate", crate, "error", err)
-		return "", fmt.Errorf("fetching crates.io data: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("crates.io unavailable (status %d) for crate %s: retry later", resp.StatusCode, crate)
-	}
-
-	var data cargoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return "", fmt.Errorf("decoding crates.io response: %w", err)
+		return "", err
 	}
 
 	versions := make([]string, 0)
@@ -96,6 +86,20 @@ func (r *CargoResolver) Resolve(ctx context.Context, crate string, pattern *pars
 	}
 
 	return "", fmt.Errorf("no matching version found for crate %s with pattern %v", crate, pattern)
+}
+
+// Yanked reports whether the pinned version has been yanked since.
+func (r *CargoResolver) Yanked(ctx context.Context, crate, v string) (string, bool, error) {
+	data, err := r.fetch(ctx, crate)
+	if err != nil {
+		return "", false, err
+	}
+	for _, cv := range data.Versions {
+		if cv.Num == v {
+			return "", cv.Yanked, nil
+		}
+	}
+	return "", false, nil
 }
 
 func (r *CargoResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {
