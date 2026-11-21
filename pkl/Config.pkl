@@ -82,6 +82,12 @@ class Tool {
 /// Runs after a successful patch, from the directory holding the config.
 afterPatch: String?
 
+/// Runs after an update, from the directory holding the config (e.g.
+/// `"go test ./..."`). When it fails, doneram bisects the bumps, moves each
+/// one that breaks it to a pull request of its own marked failing, and the
+/// rest ship as usual. Needs a git checkout.
+validate: String?
+
 /// Also check the pins doneram finds without being told: SHA-pinned
 /// `uses:` lines (`owner/repo@<sha> # v1.2.3`) in workflows and composite
 /// actions, and plain versions under mise.toml `[tools]` or in

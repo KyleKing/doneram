@@ -123,10 +123,24 @@ func hardenRepo(ctx context.Context, out report, baseDir string, apply bool, r h
 // the ones whose tag now points elsewhere: a tag this run moved, or one
 // rebuilt upstream with the same name, which is how a base image ships its
 // OS security patches.
-func refreshDigests(ctx context.Context, out report, baseDir string, r harden.Resolver) ([]pklHardenSummary, int, error) {
+//
+// only, when set, limits the refresh to those absolute file:line spots.
+func refreshDigests(ctx context.Context, out report, baseDir string, r harden.Resolver, only map[string]bool) ([]pklHardenSummary, int, error) {
 	findings, err := harden.ScanDigests(baseDir)
 	if err != nil || len(findings) == 0 {
 		return nil, 0, err
+	}
+	if only != nil {
+		kept := findings[:0]
+		for _, f := range findings {
+			abs, _ := filepath.Abs(f.File)
+			if only[fmt.Sprintf("%s:%d", abs, f.Line)] {
+				kept = append(kept, f)
+			}
+		}
+		if findings = kept; len(findings) == 0 {
+			return nil, 0, nil
+		}
 	}
 	if r == nil {
 		r = defaultPinResolver(httpclient.New(httpclient.DefaultConfig()))

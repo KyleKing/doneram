@@ -400,7 +400,19 @@ what is on disk, including sites whose registry failed to answer.
 
 ## GitHub Action
 
-doneram writes a JSON summary; the workflow turns it into a pull request.
+doneram writes a JSON summary; the workflow turns it into pull requests.
+A plan job runs `update` on a throwaway checkout and splits what changed
+into groups, each of which becomes its own PR:
+
+- `updates`: security fixes, routine updates, safe majors, lockfile fixes,
+  pinned references, and refreshed digests
+- `review-<tool>`: one per major that changes something the repo uses
+- `failing-<tool>`: one per bump that breaks `validate` (below), with the
+  failure in the body, to be fixed on its branch
+
+A risky bump then never blocks the rest from merging. The plan lists the
+groups in `$GITHUB_OUTPUT` as `groups`, and `update --plan <summary> --group
+<id>` applies just one of them.
 
 ```yaml
 name: Freshness
@@ -414,26 +426,53 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      groups: ${{ steps.plan.outputs.groups }}
+      plan: ${{ steps.encode.outputs.plan }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: kyleking/doneram@c5120304a06b6c524a9b96dd6408b01e8b453e65 # v0.5.1
+        with:
+          version: v0.5.1
+      - id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: doneram update --output /tmp/plan.json
+      - id: encode
+        run: echo "plan=$(base64 -w0 /tmp/plan.json)" >> "$GITHUB_OUTPUT"
+
+  pr:
+    needs: plan
+    if: needs.plan.outputs.groups != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(needs.plan.outputs.groups) }}
     env:
       HAS_APP: ${{ secrets.DONERAM_APP_CLIENT_ID != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - uses: kyleking/doneram@c5120304a06b6c524a9b96dd6408b01e8b453e65 # v0.5.1
         with:
           version: v0.5.1
-
       - id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: doneram update --output /tmp/doneram.json
+          PLAN: ${{ needs.plan.outputs.plan }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          echo "$PLAN" | base64 -d > /tmp/plan.json
+          doneram update --plan /tmp/plan.json --group "$GROUP" --output /tmp/doneram.json
 
       # A GITHUB_TOKEN push cannot touch workflow files, so the app token is
       # used when the repo has the secrets and the default token otherwise.
@@ -448,19 +487,31 @@ jobs:
         if: steps.check.outputs.has_upgrades == 'true'
         with:
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          branch: chore/doneram-updates
+          branch: doneram/${{ matrix.group }}
           draft: true
           delete-branch: true
           title: ${{ steps.check.outputs.title }}
           body: ${{ steps.check.outputs.body }}
 ```
 
-One stable branch means one open freshness PR at a time, recreated from
-scratch on the next run after it merges or closes.
+Each group has a stable branch, so each has at most one open PR, recreated
+from scratch on the next run after it merges or closes. Resolution runs
+again in each PR job, so a release published between the two jobs can show
+up in one PR and not the plan; the next week's run settles it.
 
 ## Validation
 
-An update can declare a command that must pass before it is kept. For a
+`validate` in `.doneram.pkl` is a command (`"go test ./..."`) the plan run
+executes after applying every update. When it fails, doneram bisects: it
+replays subsets of the bumps from a git snapshot of the tree, finds each
+bump the failure needs (up to three, in about log2(n) runs each), and moves
+each to a `failing-<tool>` PR carrying the failing output, while the rest
+ship in `updates`. If it fails with no bump applied at all, nothing is
+split and the updates PR says so. Lockfile fixes, pinned references, and
+`afterPatch` run in every trial, so a bump is only blamed for what it
+changes.
+
+Separately, an update can declare a command that must pass before it is kept. For a
 Docker pin that is a build plus the image's HEALTHCHECK, which catches a
 tag that no longer builds. Elsewhere it is whatever proves the file still
 works: a config parse, a formatter, a generated project's own CI.

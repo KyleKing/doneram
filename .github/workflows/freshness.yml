@@ -10,13 +10,15 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  # Applies every update to a throwaway checkout, runs the config's validate
+  # command, bisects any failure, and splits the changes into groups: one
+  # PR for security fixes and routine updates, one per major that needs
+  # review, and one per bump that breaks validation.
+  plan:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    env:
-      HAS_APP: ${{ secrets.DONERAM_APP_CLIENT_ID != '' }}
+    outputs:
+      groups: ${{ steps.groups.outputs.groups }}
+      plan: ${{ steps.groups.outputs.plan }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,16 +31,63 @@ jobs:
       # pkl evaluates .doneram.pkl and mise answers the tool resolvers.
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 
+      - id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: go run ./cmd/doneram update --output /tmp/plan.json
+
+      # "updates" always runs, since it also carries the Go module bump.
+      - id: groups
+        env:
+          IDS: ${{ steps.plan.outputs.groups }}
+        run: |
+          set -euo pipefail
+          echo "groups=$(jq -cn --argjson ids "${IDS:-[]}" '["updates"] + $ids | unique')" >> "$GITHUB_OUTPUT"
+          echo "plan=$(base64 -w0 /tmp/plan.json)" >> "$GITHUB_OUTPUT"
+
+  pr:
+    needs: plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(needs.plan.outputs.groups) }}
+    env:
+      HAS_APP: ${{ secrets.DONERAM_APP_CLIENT_ID != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+
       - id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: go run ./cmd/doneram update --output /tmp/doneram.json
+          PLAN: ${{ needs.plan.outputs.plan }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          set -euo pipefail
+          echo "$PLAN" | base64 -d > /tmp/plan.json
+          if jq -e --arg g "$GROUP" '.groups[]? | select(.id == $g)' /tmp/plan.json > /dev/null; then
+            go run ./cmd/doneram update --plan /tmp/plan.json --group "$GROUP" --output /tmp/doneram.json
+          else
+            echo 'has_upgrades=false' >> "$GITHUB_OUTPUT"
+          fi
 
       # doneram tracks literals, not dependency graphs, so the Dependabot
       # gomod role lives here: bump everything, let tidy settle it, and fold
-      # it into the same weekly PR.
+      # it into the updates PR.
       - name: Update Go modules
         id: gomod
+        if: matrix.group == 'updates'
         run: |
           set -euo pipefail
           # a dep can demand a newer toolchain than the pin; go get go@X
@@ -76,7 +125,7 @@ jobs:
         if: steps.check.outputs.has_upgrades == 'true' || steps.gomod.outputs.upgrades == 'true'
         with:
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          branch: chore/doneram-updates
+          branch: doneram/${{ matrix.group }}
           draft: true
           delete-branch: true
           title: "${{ steps.check.outputs.has_upgrades == 'true' && steps.check.outputs.title || 'chore: update Go modules' }}"
