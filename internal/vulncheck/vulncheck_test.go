@@ -123,3 +123,16 @@ func TestCheck_ImageScan(t *testing.T) {
 		t.Errorf("Package = %q, want busybox", out[0].Findings[0].Package)
 	}
 }
+
+// An action pin is "<sha> # v45.0.7"; the minimum fix has to be computed
+// against the tag, or every fixed version looks newer than a 0.0.0 pin.
+func TestBuildOSVResult_ActionPinReadsTag(t *testing.T) {
+	r := engine.SiteResult{
+		Site:    engine.Site{Tool: "changed-files", ResolverName: "tj-actions/changed-files", Locator: locator.Locator{Resolver: "github-action"}},
+		Matches: []locator.Match{{Value: "0123456789abcdef0123456789abcdef01234567 # v45.0.7"}},
+	}
+	got := buildOSVResult(r, []osv.Advisory{{ID: "GHSA-old", Fixed: []string{"44.0.0"}}, {ID: "GHSA-mrrh-fwg8-r2c3", Fixed: []string{"46.0.1"}}})
+	if got.PatchedVersion != "46.0.1" {
+		t.Errorf("PatchedVersion = %q, want 46.0.1", got.PatchedVersion)
+	}
+}

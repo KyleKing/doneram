@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kyleking/doneram/internal/actionrisk"
 	"github.com/kyleking/doneram/internal/config"
+	"github.com/kyleking/doneram/internal/discover"
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/eol"
 	"github.com/kyleking/doneram/internal/httpclient"
@@ -66,7 +68,16 @@ type pklSiteSummary struct {
 	Vulnerabilities []pklVulnSummary `json:"vulnerabilities,omitempty"`
 	PatchedVersion  string           `json:"patchedVersion,omitempty"`
 	HeldVulnerable  bool             `json:"heldVulnerable,omitempty"`
-	EOL             *pklEOLSummary   `json:"eol,omitempty"`
+	// Security is set when the proposed version clears the pin's
+	// advisories; WaivedMinAge when it was taken ahead of --min-age.
+	Security     bool `json:"security,omitempty"`
+	WaivedMinAge bool `json:"waivedMinAge,omitempty"`
+	// Risk grades a major action bump against how the workflow uses it:
+	// "safe", "review", or "breaking". Empty when there is no major bump
+	// to judge.
+	Risk      string         `json:"risk,omitempty"`
+	RiskNotes []string       `json:"riskNotes,omitempty"`
+	EOL       *pklEOLSummary `json:"eol,omitempty"`
 }
 
 // pklEOLSummary is the end-of-life date of the cycle a site's current pin
@@ -97,6 +108,8 @@ type pklVulnSummary struct {
 // patch, where the summary goes, and how much of it to run. Only names the
 // tools to run, empty meaning all of them.
 type pklRun struct {
+	// path is the config, empty for a repo with none, which checks only
+	// what discovery finds in the working directory.
 	path    string
 	apply   bool
 	output  string
@@ -130,22 +143,40 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	apply := run.apply
 	outputPath := run.output
 	out := run.out()
-	cfg, err := config.Load(path)
-	if err != nil {
-		return fmt.Errorf("loading %s: %w", path, err)
+	cfg := &config.Config{}
+	baseDir := "."
+	if path != "" {
+		loaded, err := config.Load(path)
+		if err != nil {
+			return fmt.Errorf("loading %s: %w", path, err)
+		}
+		cfg = loaded
+		baseDir = filepath.Dir(path)
+	} else {
+		path = "this repo"
 	}
-
-	baseDir, err := filepath.Abs(filepath.Dir(path))
+	baseDir, err := filepath.Abs(baseDir)
 	if err != nil {
 		return fmt.Errorf("resolving %s: %w", path, err)
 	}
 
-	sites, err := selectSites(cfg.Sites(baseDir), run.only)
+	all := cfg.Sites(baseDir)
+	if cfg.DiscoverEnabled() {
+		found, err := discover.Sites(baseDir)
+		if err != nil {
+			return fmt.Errorf("discovering pins: %w", err)
+		}
+		if all, err = discover.Merge(all, found, cfg.Ignore); err != nil {
+			return fmt.Errorf("discovering pins: %w", err)
+		}
+	}
+
+	sites, err := selectSites(all, run.only)
 	if err != nil {
 		return err
 	}
 	if len(sites) == 0 {
-		out.printf("%s declares no tools\n", path)
+		out.printf("%s declares no tools and has no discoverable pins\n", path)
 		summary := pklSummary{Results: []pklSiteSummary{}}
 		finishSummary(&summary)
 		return run.emit(summary, outputPath)
@@ -163,6 +194,8 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	osvClient := osv.New(httpClient)
 	scanner, _ := vulnscan.Detect()
 	vulnResults := vulncheck.Check(ctx, results, osvClient, scanner)
+	security := applySecurityFixes(ctx, results, vulnResults, lookup)
+	risks := assessRisks(ctx, results, actionrisk.New(httpClient))
 
 	eolClient := run.eol
 	if eolClient == nil {
@@ -202,6 +235,14 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 
 		siteSummary := summarizeSite(result, vuln)
+		siteSummary.Security = security[i].Fixes
+		siteSummary.WaivedMinAge = security[i].Waived
+		siteSummary.Risk = string(risks[i].Level)
+		siteSummary.RiskNotes = risks[i].Notes
+		if repeats >= 0 {
+			reportSecurity(out, vuln, security[i])
+			reportRisk(out, risks[i])
+		}
 		if result.Err == nil && result.Site.EOL != "" && siteSummary.Current != "" {
 			status, err := eolClient.Lookup(ctx, result.Site.EOL, siteSummary.Current)
 			if err != nil {
@@ -392,6 +433,35 @@ func reportVulnerabilities(out report, result engine.SiteResult, vuln vulncheck.
 	}
 }
 
+// reportSecurity says plainly when a security fix changed what a site was
+// moved to, or why it could not.
+func reportSecurity(out report, vuln vulncheck.Result, fix securityFix) {
+	switch {
+	case fix.Err != nil:
+		out.printf("    security: could not pin minimum patched %s: %v\n", vuln.PatchedVersion, fix.Err)
+	case fix.Waived:
+		out.printf("    security: taking %s, the minimum release clearing %s, ahead of --min-age\n", vuln.PatchedVersion, advisoryIDs(vuln))
+	}
+}
+
+func reportRisk(out report, a actionrisk.Assessment) {
+	if a.Level == "" {
+		return
+	}
+	out.printf("    major bump: %s\n", a.Level)
+	for _, n := range a.Notes {
+		out.printf("      - %s\n", n)
+	}
+}
+
+func advisoryIDs(vuln vulncheck.Result) string {
+	ids := make([]string, 0, len(vuln.Findings))
+	for _, f := range vuln.Findings {
+		ids = append(ids, f.ID)
+	}
+	return strings.Join(ids, ", ")
+}
+
 func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSummary {
 	s := pklSiteSummary{
 		Tool:           result.Site.Tool,
@@ -494,34 +564,141 @@ func runAfterPatch(ctx context.Context, out report, command, baseDir string) err
 }
 
 func finishSummary(summary *pklSummary) {
-	var updated []pklSiteSummary
+	// A tool pinned at several sites yields one summary per site; the
+	// reviewer needs one row per distinct move, carrying the strongest
+	// risk any of its sites reported.
+	type key struct{ tool, current, latest string }
+	index := map[key]int{}
+	var rows []pklSiteSummary
 	for _, s := range summary.Results {
-		if s.Updated || s.needsUpdate {
-			updated = append(updated, s)
+		if !s.Updated && !s.needsUpdate {
+			continue
 		}
+		k := key{s.Tool, s.Current, s.Latest}
+		if i, ok := index[k]; ok {
+			rows[i] = mergeRow(rows[i], s)
+			continue
+		}
+		index[k] = len(rows)
+		rows = append(rows, s)
 	}
 
-	summary.HasUpgrades = len(updated) > 0
+	summary.HasUpgrades = len(rows) > 0
 	if !summary.HasUpgrades {
 		summary.Title = "chore: no pin updates available"
 		summary.Body = "doneram found no pins to update."
 		return
 	}
 
-	summary.Title = fmt.Sprintf("chore: update %d pin(s)", len(updated))
+	var security, review, routine []pklSiteSummary
+	for _, r := range rows {
+		switch {
+		case r.Security:
+			security = append(security, r)
+		case r.Risk == string(actionrisk.Breaking) || r.Risk == string(actionrisk.Review):
+			review = append(review, r)
+		default:
+			routine = append(routine, r)
+		}
+	}
+
+	if len(security) > 0 {
+		summary.Title = fmt.Sprintf("fix: update %d pin(s), %d clearing advisories", len(rows), len(security))
+	} else {
+		summary.Title = fmt.Sprintf("chore: update %d pin(s)", len(rows))
+	}
 
 	var body strings.Builder
-	body.WriteString("Automated pin updates from doneram.\n\n")
-	body.WriteString("| Tool | Current | Latest | Changes |\n")
-	body.WriteString("| --- | --- | --- | --- |\n")
-	for _, s := range updated {
-		changes := ""
-		if s.Compare != "" {
-			changes = fmt.Sprintf("[compare](%s)", s.Compare)
-		}
-		fmt.Fprintf(&body, "| `%s` | `%s` | `%s` | %s |\n", s.Tool, s.Current, s.Latest, changes)
-	}
+	body.WriteString("Automated pin updates from doneram.\n")
+	writeSection(&body, "Security fixes", "Each moves a pin with a published advisory to a release that clears it. "+
+		"Rows marked *ahead of --min-age* take the minimum fixed release before the cooldown would have offered it.", security)
+	writeSection(&body, "Needs review", "Major action bumps that change something this repo's workflows use.", review)
+	writeSection(&body, "Updates", "", routine)
 	summary.Body = body.String()
+}
+
+// mergeRow folds another site of the same move into a row, keeping the
+// strongest risk and every distinct note.
+func mergeRow(row, s pklSiteSummary) pklSiteSummary {
+	row.Security = row.Security || s.Security
+	row.WaivedMinAge = row.WaivedMinAge || s.WaivedMinAge
+	if riskRank(s.Risk) > riskRank(row.Risk) {
+		row.Risk = s.Risk
+	}
+	seen := map[string]bool{}
+	for _, n := range row.RiskNotes {
+		seen[n] = true
+	}
+	for _, n := range s.RiskNotes {
+		if !seen[n] {
+			row.RiskNotes = append(row.RiskNotes, n)
+			seen[n] = true
+		}
+	}
+	return row
+}
+
+func riskRank(r string) int {
+	switch actionrisk.Level(r) {
+	case actionrisk.Breaking:
+		return 3
+	case actionrisk.Review:
+		return 2
+	case actionrisk.Safe:
+		return 1
+	}
+	return 0
+}
+
+func writeSection(body *strings.Builder, title, intro string, rows []pklSiteSummary) {
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(body, "\n### %s\n\n", title)
+	if intro != "" {
+		fmt.Fprintf(body, "%s\n\n", intro)
+	}
+	body.WriteString("| Tool | Current | Latest | Notes | Changes |\n")
+	body.WriteString("| --- | --- | --- | --- | --- |\n")
+	var details []pklSiteSummary
+	for _, r := range rows {
+		changes := ""
+		if r.Compare != "" {
+			changes = fmt.Sprintf("[compare](%s)", r.Compare)
+		}
+		fmt.Fprintf(body, "| `%s` | `%s` | `%s` | %s | %s |\n", r.Tool, r.Current, r.Latest, rowNote(r), changes)
+		if len(r.RiskNotes) > 0 {
+			details = append(details, r)
+		}
+	}
+	for _, r := range details {
+		fmt.Fprintf(body, "\n<details><summary><code>%s</code> major bump: %s</summary>\n\n", r.Tool, r.Risk)
+		for _, n := range r.RiskNotes {
+			fmt.Fprintf(body, "- %s\n", n)
+		}
+		body.WriteString("\n</details>\n")
+	}
+}
+
+func rowNote(r pklSiteSummary) string {
+	var parts []string
+	if r.Security {
+		ids := make([]string, 0, len(r.Vulnerabilities))
+		for _, v := range r.Vulnerabilities {
+			ids = append(ids, v.ID)
+		}
+		parts = append(parts, "fixes "+strings.Join(ids, ", "))
+		if r.WaivedMinAge {
+			parts = append(parts, "*ahead of --min-age*")
+		}
+	}
+	switch actionrisk.Level(r.Risk) {
+	case actionrisk.Safe:
+		parts = append(parts, "major, no change to inputs or outputs used here")
+	case actionrisk.Review, actionrisk.Breaking:
+		parts = append(parts, "major, "+r.Risk)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // writeSummary writes summary as JSON to outputPath when set, and always
