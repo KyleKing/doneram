@@ -1,3 +1,9 @@
+## v0.18.0 (2026-11-21)
+
+### Feat
+
+- report end of life for managed AWS versions and GitHub API versions (#14)
+
 ## v0.17.0 (2026-11-21)
 
 ### Feat
