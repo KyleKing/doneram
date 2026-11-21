@@ -332,6 +332,24 @@ equals or starts with at a dot, so `3.13.5` is `3.13` and `17.11` is `17`. A
 pin no cycle covers fails the run. doneram reports the date and leaves the
 threshold to whoever reads the summary.
 
+With no config at all, doneram also finds what has an end of life on its
+own and looks each one up:
+
+| Where | What | Product |
+| --- | --- | --- |
+| `mise.toml`, `.tool-versions` | python, node, go, ruby, java, terraform, deno, bun, … | matching runtime |
+| Dockerfile `FROM`, compose `image:` | `python:3.13-slim`, `node:22`, `postgres:16`, `debian:bookworm`, `alpine:3.20`, … | cycle read from the tag (or codename) |
+| workflow `runs-on` and matrix | `ubuntu-22.04`, `macos-13`, `windows-2019` | `github-actions-runner-images` |
+| `requires-python`, `engines.node`, `go.mod` `go` | the oldest version the project still claims to support | python, nodejs, go |
+| quoted model IDs in code and config | `"claude-3-opus-20240229"`, `"gpt-4-0613"` | `claude`, `openai-api-models` |
+
+Anything past its end of life, or within 90 days of it, is reported and
+listed under *End of life* in the PR body. doneram never changes these:
+moving a runtime or a model is a migration to plan, not a version bump.
+`--fail-on-eol` exits 9 while anything is past its date. Test files and
+fixtures are not scanned for model IDs, and a reference no cycle covers is
+skipped quietly.
+
 ## Vulnerabilities
 
 Advisories come from [OSV](https://osv.dev), which covers PyPI, npm, Go,

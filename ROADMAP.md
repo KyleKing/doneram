@@ -134,10 +134,12 @@ owns a file does the resolving.
    `update` re-resolves every digest after patching, so a moved tag never
    keeps a stale digest and a same-tag rebuild arrives as a PR row.
    `--fail-on-unpinned` gates it.
-3. **EOL runtimes with no config.** Discovered tools (python, node, go,
-   ruby, java, terraform, postgres images) get their endoflife.date product
-   assigned automatically, so a runtime past end-of-life is flagged and its
-   next supported cycle proposed without an `eol` line.
+3. **End of life with no config. Shipped.** mise runtimes, base images,
+   runner labels, language floors (`requires-python`, `engines.node`, the
+   `go` directive), and LLM model IDs in code are matched to their
+   endoflife.date product and reported when past or within 90 days of end
+   of life; `--fail-on-eol` gates it. Reported, never bumped: a runtime or
+   model move is a migration.
 4. **PR shape, kept lean.** Split one PR per review/breaking item from the
    security-plus-routine PR so one risky bump never blocks the rest, and a
    `validate` command that, on failure, bisects the bumps and holds the

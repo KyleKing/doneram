@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kyleking/doneram/internal/parser"
 )
 
 // expandFiles expands file patterns (including globs) into a deduplicated list of file paths.
@@ -108,4 +110,20 @@ func fileExists(path string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// directiveDockerfile reports whether path is a Dockerfile carrying at
+// least one `# doneram:` directive. One without directives has nothing for
+// the Dockerfile path to do, so the run falls to discovery, which still
+// pins its images and checks their end of life.
+func directiveDockerfile(path string) bool {
+	if !fileExists(path) {
+		return false
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	df, err := parser.Parse(string(content))
+	return err != nil || len(df.Directives) > 0
 }
