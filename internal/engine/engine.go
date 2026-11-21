@@ -41,6 +41,11 @@ type Site struct {
 
 	// EOL is the endoflife.date product the pin's cycle is looked up in.
 	EOL string
+
+	// Dir is where Command runs, empty meaning the working directory. A
+	// fleet run checks many clones from one process, so it cannot rely on
+	// the working directory being the repo.
+	Dir string
 }
 
 func (s Site) isCommand() bool {
