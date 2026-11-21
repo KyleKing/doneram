@@ -143,3 +143,9 @@ func (r Ref) display() string {
 	}
 	return r.name() + ":" + r.Tag
 }
+
+// ExplicitTag reports whether the reference names its tag, rather than
+// falling back to an implied "latest".
+func (r Ref) ExplicitTag() bool {
+	return r.Tag != "" && !r.implicitTag
+}

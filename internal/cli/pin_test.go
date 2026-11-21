@@ -16,6 +16,10 @@ func (stubPin) PinAction(context.Context, string, string) (string, error) {
 	return strings.Repeat("b", 40) + " # v4.2.2", nil
 }
 
+func (stubPin) ImageDigest(context.Context, string) (string, error) {
+	return "sha256:" + strings.Repeat("e", 64), nil
+}
+
 func (stubPin) PinTool(context.Context, string, string) (string, error) {
 	return "1.23.4", nil
 }

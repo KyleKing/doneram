@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/kyleking/doneram/internal/builder"
+	"github.com/kyleking/doneram/internal/harden"
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/parser"
 	"github.com/kyleking/doneram/internal/reporter"
@@ -294,6 +295,21 @@ func processUpdateFile(ctx context.Context, file string, cfg ProcessorConfig) Fi
 	}
 
 	logger.Info("update completed", "file", file, "updates_applied", len(result.Updates))
+
+	// A tag that just moved still carries the digest of the old one.
+	if pinned, err := harden.DigestsIn([]string{file}); err == nil && len(pinned) > 0 {
+		harden.Resolve(ctx, pinned, defaultPinResolver(httpclient.New(httpclient.DefaultConfig())))
+		for _, f := range pinned {
+			if f.Err != nil {
+				result.ProcessingErr = fmt.Errorf("refreshing digest of %s: %w", f.Name, f.Err)
+				return result
+			}
+		}
+		if _, err := harden.Apply(pinned); err != nil {
+			result.ProcessingErr = fmt.Errorf("refreshing digests: %w", err)
+			return result
+		}
+	}
 
 	// Build and validate if not skipped
 	if !cfg.SkipBuild {

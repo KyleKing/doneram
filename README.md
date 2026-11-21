@@ -110,6 +110,19 @@ same before it checks anything, so the weekly PR carries them:
 - A mise `node = "22"`, `python = "latest"`, or `.tool-versions` `ruby 3`
   becomes the exact version `mise latest` resolves it to.
 
+- `FROM python:3.13-slim`, `COPY --from=ghcr.io/astral-sh/uv:0.5.4`, and
+  a compose `image: postgres:16.4` gain the digest their tag points at:
+  `python:3.13-slim@sha256:…`. The tag stays for humans and for updates;
+  the digest is what actually gets pulled. Stages, `scratch`, `${VAR}`
+  images, and images with no tag are left alone.
+
+Once an image carries a digest, every `update` re-resolves it after
+patching. A tag the run just moved gets the digest that matches it, and a
+tag rebuilt upstream under the same name, which is how a base image ships
+its OS security patches, gets the new digest under *Pinned floating
+references*. Digests come straight from the registry's API, so docker need
+not be installed.
+
 A branch ref (`@main`) has no release to name and is reported for you to
 pin by hand. `pin --check`, or `--fail-on-unpinned` on `check` and
 `update`, exits 8 while any floating reference remains.

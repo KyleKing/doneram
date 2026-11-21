@@ -1,6 +1,7 @@
 // Package harden finds references that name a moving target, a GitHub
-// Action used by tag or branch and a mise tool given as "latest" or a bare
-// major, and rewrites them as exact pins. An exact pin is what the rest of
+// Action used by tag or branch, a mise tool given as "latest" or a bare
+// major, and a container image named by tag alone, and rewrites them as
+// exact pins. An exact pin is what the rest of
 // doneram can reason about: discovery only sees an action pinned by SHA with
 // its version in a comment, an advisory range is only checked against a
 // full version, and a tag can be moved to a different commit after review.
@@ -52,6 +53,9 @@ type Resolver interface {
 	PinAction(ctx context.Context, repo, ref string) (string, error)
 	// PinTool returns the exact version mise would install for ref.
 	PinTool(ctx context.Context, tool, ref string) (string, error)
+	// ImageDigest returns the digest an image's tag ("python:3.13-slim")
+	// points to now.
+	ImageDigest(ctx context.Context, image string) (string, error)
 }
 
 var actionFiles = []string{
@@ -129,7 +133,11 @@ func Scan(baseDir string) ([]Finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(out, tools...), nil
+	images, err := scanImages(baseDir, false)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(out, tools...), images...), nil
 }
 
 func scanTools(baseDir string) ([]Finding, error) {
@@ -214,6 +222,8 @@ func Resolve(ctx context.Context, findings []Finding, r Resolver) {
 					break
 				}
 				a.value, a.err = r.PinAction(ctx, f.Name, f.Ref)
+			case Image, Digest:
+				a.value, a.err = r.ImageDigest(ctx, f.Name)
 			case Tool:
 				a.value, a.err = r.PinTool(ctx, f.Name, f.Ref)
 				if a.err == nil && !exactVersion.MatchString(a.value) {
@@ -223,6 +233,10 @@ func Resolve(ctx context.Context, findings []Finding, r Resolver) {
 			memo[k] = a
 		}
 		f.Replacement, f.Err = a.value, a.err
+		// A digest that still matches its tag needs no rewrite.
+		if f.Kind == Digest && f.Replacement == f.Ref {
+			f.Replacement = ""
+		}
 	}
 }
 
@@ -266,8 +280,11 @@ func Apply(findings []Finding) (int, error) {
 // becomes `owner/repo[/path]@<sha> # <tag>`, unquoted, keeping any comment
 // that said more than the old ref.
 func (f Finding) rewrite(span string) string {
-	if f.Kind == Tool {
+	switch f.Kind {
+	case Tool, Digest:
 		return f.Replacement
+	case Image:
+		return span + "@" + f.Replacement
 	}
 	m := actionRef.FindStringSubmatch("uses: " + span)
 	if m == nil {

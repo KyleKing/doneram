@@ -227,7 +227,9 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 			lockErrors++
 		}
 	}
-	if len(sites) == 0 && len(locks) == 0 && len(hardened) == 0 {
+	// An apply run goes on regardless: images already pinned by digest
+	// are refreshed after the (here empty) patch step.
+	if len(sites) == 0 && len(locks) == 0 && len(hardened) == 0 && !apply {
 		out.printf("%s declares no tools and has no discoverable pins\n", path)
 		summary := pklSummary{Results: []pklSiteSummary{}}
 		finishSummary(&summary)
@@ -353,6 +355,16 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	}
 	summary.Lockfiles = locks
 	unresolved += lockErrors
+	if apply && cfg.DiscoverEnabled() && len(run.only) == 0 {
+		// Runs after every patch, so a tag a site just moved gets the
+		// digest that matches it.
+		refreshed, n, err := refreshDigests(ctx, out, baseDir, run.pin)
+		if err != nil {
+			return fmt.Errorf("refreshing image digests: %w", err)
+		}
+		hardened = append(hardened, refreshed...)
+		hardenFailures += n
+	}
 	summary.Hardened = hardened
 	unresolved += hardenFailures
 	for _, h := range hardened {

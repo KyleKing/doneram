@@ -112,3 +112,20 @@ FROM ghcr.io/kyleking/doneram:v1.2.3
 		t.Errorf("ResolverName = %q, want ghcr.io/kyleking/doneram", sites[0].ResolverName)
 	}
 }
+
+func TestSplitImageRef(t *testing.T) {
+	tests := map[string][2]string{
+		"python:3.13-slim":            {"python", "3.13-slim"},
+		"python:3.13-slim@sha256:abc": {"python", "3.13-slim"},
+		"reg:5000/x/y:1.2":            {"reg:5000/x/y", "1.2"},
+		"reg:5000/x/y":                {"", ""},
+		"alpine":                      {"", ""},
+		"img@sha256:abc":              {"", ""},
+	}
+	for in, want := range tests {
+		name, tag := SplitImageRef(in)
+		if name != want[0] || tag != want[1] {
+			t.Errorf("SplitImageRef(%q) = %q, %q; want %q, %q", in, name, tag, want[0], want[1])
+		}
+	}
+}
