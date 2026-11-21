@@ -28,3 +28,6 @@ coverage.out
 doneram
 
 body.md
+
+# Agent worktrees
+.claude/worktrees/

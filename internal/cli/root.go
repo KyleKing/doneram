@@ -32,6 +32,7 @@ func NewApp(version, commit, date string) *cli.Command {
 			newUpdateCommand(),
 			newPinCommand(),
 			newFleetCommand(),
+			newExplainCommand(),
 			newVersionCommand(version, commit, date),
 		},
 	}
