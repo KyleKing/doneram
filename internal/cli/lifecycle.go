@@ -2,9 +2,13 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kyleking/doneram/internal/eol"
@@ -44,6 +48,14 @@ func checkLifecycle(ctx context.Context, out report, baseDir string, client *eol
 			continue
 		}
 		var status eol.Status
+		if r.Product == lifecycle.GitHubAPI {
+			supported, err := githubAPIVersions(ctx)
+			if err != nil || supported[r.Version] {
+				continue
+			}
+			flagged = append(flagged, pklLifecycleSummary{Source: string(r.Source), File: relTo(baseDir, r.File), Line: r.Line, Name: r.Name, Product: "GitHub REST API", Cycle: r.Version, Past: true})
+			continue
+		}
 		if r.ByID {
 			status, err = client.LookupID(ctx, r.Product, r.Version)
 		} else {
@@ -107,4 +119,55 @@ func lifecycleStatus(s pklLifecycleSummary) string {
 	default:
 		return fmt.Sprintf("ends %s (%d days)", s.Date, *s.DaysLeft)
 	}
+}
+
+// githubAPIBase is GitHub's REST API, overridden in tests.
+var githubAPIBase = "https://api.github.com"
+
+var (
+	githubVersionsOnce sync.Once
+	githubVersions     map[string]bool
+	githubVersionsErr  error
+)
+
+// githubAPIVersions returns the REST API versions GitHub still accepts, read
+// once per process from its /versions endpoint.
+func githubAPIVersions(ctx context.Context) (map[string]bool, error) {
+	githubVersionsOnce.Do(func() {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubAPIBase+"/versions", nil)
+		if err != nil {
+			githubVersionsErr = err
+			return
+		}
+		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			githubVersionsErr = err
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var list []string
+		if resp.StatusCode != http.StatusOK {
+			githubVersionsErr = fmt.Errorf("GitHub /versions: status %d", resp.StatusCode)
+			return
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+			githubVersionsErr = err
+			return
+		}
+		githubVersions = map[string]bool{}
+		for _, v := range list {
+			githubVersions[v] = true
+		}
+	})
+	return githubVersions, githubVersionsErr
+}
+
+func relTo(baseDir, path string) string {
+	if rel, err := filepath.Rel(baseDir, path); err == nil {
+		return filepath.ToSlash(rel)
+	}
+	return path
 }

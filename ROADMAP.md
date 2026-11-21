@@ -162,7 +162,10 @@ owns a file does the resolving.
 8. **Fleet CLI.** Run across many repos (an org, or a list) from one
    process, locally on demand or hosted on a schedule, and render one view
    of stale, vulnerable, and end-of-life pins.
-9. **IaC and other toil.** Terraform and Pulumi providers and modules;
+9. **IaC and other toil.** Shipped so far: end of life for Lambda
+   runtimes, RDS/Aurora, EKS, ElastiCache, and OpenSearch versions in
+   Terraform, CloudFormation/SAM, and Serverless files, and pinned GitHub
+   REST API versions. Remaining: Terraform and Pulumi providers and modules;
    versions in IaC with an end of life (Lambda runtimes, RDS/Aurora, EKS,
    ElastiCache, OpenSearch); AMI IDs and SSM public parameters; API version
    strings in code (Stripe, GitHub); and copier template drift.

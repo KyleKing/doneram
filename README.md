@@ -352,6 +352,8 @@ own and looks each one up:
 | workflow `runs-on` and matrix | `ubuntu-22.04`, `macos-13`, `windows-2019` | `github-actions-runner-images` |
 | `requires-python`, `engines.node`, `go.mod` `go` | the oldest version the project still claims to support | python, nodejs, go |
 | quoted model IDs in code and config | `"claude-3-opus-20240229"`, `"gpt-4-0613"` | `claude`, `openai-api-models` |
+| Terraform, CloudFormation/SAM, Serverless | Lambda `runtime`, RDS/Aurora `engine_version`, EKS `version`, ElastiCache and OpenSearch `engine_version` | `aws-lambda`, `amazon-rds-*`, `amazon-aurora-*`, `amazon-eks`, `amazon-elasticache-redis`, `amazon-opensearch` |
+| `X-GitHub-Api-Version` in code | `2022-11-28` | GitHub's own `/versions` list: a version no longer listed is past its end |
 
 Anything past its end of life, or within 90 days of it, is reported and
 listed under *End of life* in the PR body. doneram never changes these:
