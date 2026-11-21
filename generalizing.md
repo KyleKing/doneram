@@ -1,5 +1,9 @@
 # Generalizing doner into doneram
 
+The original proposal, kept for its reasoning. It predates the rename and
+names packages (`internal/reporter`, `internal/builder`) that have since
+been removed; [ROADMAP.md](./ROADMAP.md) is the current plan.
+
 ## Problem
 
 `scripts/freshness/checkers.py` exists, nearly byte-for-byte, in three repos:

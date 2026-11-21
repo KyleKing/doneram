@@ -438,7 +438,13 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 				out.printf("✗ %s: patch failed: %v\n", result.Site.Tool, err)
 				siteSummary.Error = err.Error()
 				patchFailures++
-			} else if count > 0 {
+			} else if count == 0 {
+				// Find matched the pin, so a patch that matches nothing is
+				// a pattern Find and Patch read differently, not a no-op.
+				out.printf("✗ %s: patch matched nothing\n", result.Site.Tool)
+				siteSummary.Error = "patch matched nothing"
+				patchFailures++
+			} else {
 				out.printf("  patched %d site(s) for %s\n", count, result.Site.Tool)
 				siteSummary.Updated = true
 				patchedAny = true

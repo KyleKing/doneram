@@ -2,339 +2,98 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"regexp"
-	"strings"
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/kyleking/doneram/internal/httpclient"
-	"github.com/kyleking/doneram/internal/parser"
-	"github.com/kyleking/doneram/internal/reporter"
 	"github.com/kyleking/doneram/internal/resolver"
-	"github.com/kyleking/doneram/internal/updater"
 )
 
 func newCheckCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "check",
-		Usage: "Check for available updates (dry-run)",
-		Flags: []cli.Flag{
-			&cli.StringSliceFlag{
-				Name:    "file",
-				Aliases: []string{"f"},
-				Usage:   "path(s) to Dockerfile - supports globs (e.g., docker/*/Dockerfile, **/Dockerfile)",
-			},
-			&cli.StringFlag{
-				Name:  "format",
-				Usage: "output format: stdout, github-actions, json",
-				Value: "stdout",
-			},
-			&cli.IntFlag{
-				Name:  "workers",
-				Usage: "number of sites or files resolved in parallel",
-				Value: 8,
-			},
-			&cli.BoolFlag{
-				Name:  "apply",
-				Usage: "patch a .doneram.pkl config's sites in place instead of only reporting drift",
-			},
-			&cli.BoolFlag{
-				Name:  "fail-on-drift",
-				Usage: "exit non-zero when a pin is out of date, instead of reporting drift and exiting 0",
-			},
-			&cli.StringFlag{
-				Name:  "snapshot",
-				Usage: "write a GitHub dependency submission snapshot of the pins on disk to this path",
-			},
-			&cli.BoolFlag{
-				Name:  "fail-on-eol",
-				Usage: "exit 9 when a runtime, base image, runner, language floor, or model is past end of life",
-			},
-			&cli.BoolFlag{
-				Name:  "fail-on-unpinned",
-				Usage: "exit 8 when an action is used by tag or a mise tool by prefix after the run",
-			},
-			&cli.BoolFlag{
-				Name:  "fail-on-vuln",
-				Usage: "exit 7 when a pin with a known advisory is still on disk after the run",
-			},
-			&cli.DurationFlag{
-				Name:  "min-age",
-				Usage: "hold back a release until it is this old, matching Dependabot's three-day default; 0 disables",
-				Value: resolver.DefaultCooldown,
-			},
-			&cli.StringFlag{
-				Name:  "config",
-				Usage: "path to a .doneram.pkl config, overriding discovery in the working directory",
-			},
-			&cli.StringSliceFlag{
-				Name:  "only",
-				Usage: "check only these tools from a .doneram.pkl config (repeatable)",
-			},
-			&cli.StringFlag{
-				Name:  "output",
-				Usage: "write a .doneram.pkl config's JSON summary to this path",
-			},
+		Name:   "check",
+		Usage:  "Report out-of-date, vulnerable, floating, and end-of-life pins without changing anything",
+		Flags:  runFlags(),
+		Action: func(ctx context.Context, cmd *cli.Command) error { return runFromFlags(ctx, cmd, false, nil) },
+	}
+}
+
+// runFlags are the flags check and update share: what to read, how to
+// report it, and which findings fail the run.
+func runFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.StringFlag{
+			Name:  "format",
+			Usage: "output format: stdout or json",
+			Value: "stdout",
 		},
-		Action: runCheck,
+		&cli.IntFlag{
+			Name:  "workers",
+			Usage: "number of sites resolved in parallel",
+			Value: 8,
+		},
+		&cli.BoolFlag{
+			Name:  "fail-on-drift",
+			Usage: "exit non-zero when a pin is out of date, instead of reporting drift and exiting 0",
+		},
+		&cli.StringFlag{
+			Name:  "snapshot",
+			Usage: "write a GitHub dependency submission snapshot of the pins on disk to this path",
+		},
+		&cli.BoolFlag{
+			Name:  "fail-on-eol",
+			Usage: "exit 9 when a runtime, base image, runner, language floor, or model is past end of life",
+		},
+		&cli.BoolFlag{
+			Name:  "fail-on-unpinned",
+			Usage: "exit 8 when an action is used by tag or a mise tool by prefix after the run",
+		},
+		&cli.BoolFlag{
+			Name:  "fail-on-vuln",
+			Usage: "exit 7 when a pin with a known advisory is still on disk after the run",
+		},
+		&cli.DurationFlag{
+			Name:  "min-age",
+			Usage: "hold back a release until it is this old, matching Dependabot's three-day default; 0 disables",
+			Value: resolver.DefaultCooldown,
+		},
+		&cli.StringFlag{
+			Name:  "config",
+			Usage: "path to a .doneram.pkl config, overriding discovery in the working directory",
+		},
+		&cli.StringSliceFlag{
+			Name:  "only",
+			Usage: "check only these tools (repeatable)",
+		},
+		&cli.StringFlag{
+			Name:  "output",
+			Usage: "write the run's JSON summary to this path",
+		},
 	}
 }
 
-func runCheck(ctx context.Context, cmd *cli.Command) error {
-	patterns := cmd.StringSlice("file")
-	verbose := cmd.Bool("verbose")
-	format := cmd.String("format")
-	workers := cmd.Int("workers")
-
+// runFromFlags runs the repo in the working directory: its .doneram.pkl
+// when there is one (or --config names one), and otherwise what discovery
+// finds, Dockerfile directives included.
+func runFromFlags(ctx context.Context, cmd *cli.Command, apply bool, group *pklGroup) error {
 	ctx = resolver.ContextWithCooldown(ctx, cmd.Duration("min-age"))
-
-	if len(patterns) == 0 {
-		if path, ok := findDoneramConfig(cmd.String("config")); ok {
-			return runCheckPkl(ctx, pklRun{
-				path:           path,
-				apply:          cmd.Bool("apply"),
-				output:         cmd.String("output"),
-				workers:        int(cmd.Int("workers")),
-				only:           cmd.StringSlice("only"),
-				format:         format,
-				failOnDrift:    cmd.Bool("fail-on-drift"),
-				failOnVuln:     cmd.Bool("fail-on-vuln"),
-				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
-				failOnEOL:      cmd.Bool("fail-on-eol"),
-				snapshot:       cmd.String("snapshot"),
-			})
-		}
-		if path := cmd.String("config"); path != "" {
-			return fmt.Errorf("reading %s: no such config", path)
-		}
-		// With no config and no Dockerfile, check what discovery finds:
-		// SHA-pinned actions and mise tools need no config at all.
-		if !directiveDockerfile("Dockerfile") {
-			return runCheckPkl(ctx, pklRun{
-				apply:          cmd.Bool("apply"),
-				output:         cmd.String("output"),
-				workers:        int(cmd.Int("workers")),
-				only:           cmd.StringSlice("only"),
-				format:         format,
-				failOnDrift:    cmd.Bool("fail-on-drift"),
-				failOnVuln:     cmd.Bool("fail-on-vuln"),
-				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
-				failOnEOL:      cmd.Bool("fail-on-eol"),
-				snapshot:       cmd.String("snapshot"),
-			})
-		}
+	run := pklRun{
+		apply:          apply,
+		output:         cmd.String("output"),
+		workers:        int(cmd.Int("workers")),
+		only:           cmd.StringSlice("only"),
+		format:         cmd.String("format"),
+		failOnDrift:    cmd.Bool("fail-on-drift"),
+		failOnVuln:     cmd.Bool("fail-on-vuln"),
+		failOnUnpinned: cmd.Bool("fail-on-unpinned"),
+		failOnEOL:      cmd.Bool("fail-on-eol"),
+		snapshot:       cmd.String("snapshot"),
+		group:          group,
 	}
-
-	// Expand file patterns
-	files, err := expandFiles(patterns)
-	if err != nil {
-		return err
+	if path, ok := findDoneramConfig(cmd.String("config")); ok {
+		run.path = path
+	} else if path := cmd.String("config"); path != "" {
+		return &ExitError{Code: ExitConfig, Err: fmt.Errorf("reading %s: no such config", path)}
 	}
-
-	rep := reporter.NewOutputReporter(format, verbose)
-
-	if verbose {
-		fmt.Printf("Checking %d file(s) for updates...\n", len(files))
-	}
-
-	// Process files in parallel
-	cfg := ProcessorConfig{
-		MaxWorkers: int(workers),
-		Verbose:    verbose,
-	}
-
-	results := processFilesParallel(ctx, files, cfg, processCheckFile)
-
-	// Report results sequentially
-	var totalUpdates, successCnt, failedCnt int
-	for _, result := range results {
-		if result.ProcessingErr != nil {
-			failedCnt++
-			if verbose || len(files) > 1 {
-				fmt.Printf("Error processing %s: %v\n", result.File, result.ProcessingErr)
-			}
-			continue
-		}
-
-		successCnt++
-		totalUpdates += len(result.Updates)
-		rep.ReportCheck(result.File, result.InstructionCnt, result.DirectiveCnt, result.Updates)
-	}
-
-	// Report summary for multi-file runs
-	if len(files) > 1 {
-		rep.ReportSummary(len(files), totalUpdates, successCnt, failedCnt)
-	}
-
-	if failedCnt > 0 {
-		return fmt.Errorf("%d of %d file(s) failed processing", failedCnt, len(files))
-	}
-
-	return nil
-}
-
-// processCheckFile processes a single Dockerfile and returns the result.
-func processCheckFile(ctx context.Context, file string, cfg ProcessorConfig) FileResult {
-	logger := httpclient.LoggerFromContext(ctx)
-	result := FileResult{
-		File: file,
-	}
-
-	logger.Info("checking file", "file", file, "format", "dockerfile")
-
-	content, err := os.ReadFile(file)
-	if err != nil {
-		result.ProcessingErr = fmt.Errorf("reading dockerfile: %w", err)
-		return result
-	}
-
-	df, err := parser.Parse(string(content))
-	if err != nil {
-		result.ProcessingErr = fmt.Errorf("parsing dockerfile: %w", err)
-		return result
-	}
-
-	result.InstructionCnt = len(df.Instructions)
-	result.DirectiveCnt = len(df.Directives)
-
-	httpClient := httpclient.New(httpclient.DefaultConfig())
-	dockerHub := resolver.NewDockerHubResolver(httpClient)
-	ghcr := resolver.NewGHCRResolver(httpClient)
-
-	// Package manager resolvers (for future RUN instruction support)
-	_ = resolver.NewPyPIResolver(httpClient)
-	_ = resolver.NewNPMResolver(httpClient)
-	_ = resolver.NewAPKResolver(httpClient)
-	_ = resolver.NewAPTResolver(httpClient)
-	_ = resolver.NewCargoResolver(httpClient)
-	_ = resolver.NewRubyGemsResolver(httpClient)
-	_ = resolver.NewComposerResolver(httpClient)
-	_ = resolver.NewYumResolver(httpClient)
-
-	directiveMap := make(map[int]*parser.Directive)
-	for _, d := range df.Directives {
-		directiveMap[d.Line] = d
-	}
-
-	// Resolve latest versions
-	resolved := make(map[int]string)
-	for _, instr := range df.Instructions {
-		directive := directiveMap[instr.Line-1]
-		if directive == nil || directive.Ignore {
-			continue
-		}
-
-		var latest string
-		var err error
-		if instr.Command == "FROM" {
-			latest, err = checkFromInstruction(ctx, instr, directive, dockerHub, ghcr)
-		} else if instr.Command == "COPY" && strings.Contains(instr.Args, "--from=") {
-			latest, err = checkCopyFromInstruction(ctx, instr, directive, dockerHub, ghcr)
-		}
-
-		if err != nil {
-			var notFoundErr *httpclient.NotFoundError
-			var rateLimitErr *httpclient.RateLimitError
-
-			if errors.As(err, &notFoundErr) {
-				logger.Debug("resource not found", "error", err)
-			} else if errors.As(err, &rateLimitErr) {
-				logger.Warn("rate limit encountered", "error", err)
-			} else {
-				logger.Error("resolution failed", "error", err)
-			}
-			continue
-		}
-
-		if latest != "" {
-			resolved[instr.Line] = latest
-		}
-	}
-
-	// Create updates list
-	result.Updates = updater.UpdateFromInstructions(df.Instructions, directiveMap, resolved)
-
-	logger.Info("check completed", "file", file, "updates_found", len(result.Updates))
-
-	return result
-}
-
-var imageRegex = regexp.MustCompile(`^([^:]+):(.+)$`)
-
-func checkFromInstruction(ctx context.Context, instr parser.Instruction, directive *parser.Directive, dockerHub, ghcr resolver.Resolver) (string, error) {
-	image := strings.TrimSpace(instr.Args)
-
-	matches := imageRegex.FindStringSubmatch(image)
-	if matches == nil {
-		return "", fmt.Errorf("invalid FROM format: %s", image)
-	}
-
-	imageName := matches[1]
-
-	if len(directive.Packages) == 0 {
-		return "", fmt.Errorf("no package directive found")
-	}
-
-	pkg := directive.Packages[0]
-	if pkg.Ignore {
-		return "", nil
-	}
-
-	var r resolver.Resolver
-	if strings.Contains(imageName, "ghcr.io") {
-		r = ghcr
-	} else {
-		r = dockerHub
-	}
-
-	latest, err := r.Resolve(ctx, imageName, pkg.Pattern)
-	if err != nil {
-		return "", err
-	}
-
-	return latest, nil
-}
-
-var copyFromRegex = regexp.MustCompile(`--from=([^\s]+)`)
-
-func checkCopyFromInstruction(ctx context.Context, instr parser.Instruction, directive *parser.Directive, dockerHub, ghcr resolver.Resolver) (string, error) {
-	matches := copyFromRegex.FindStringSubmatch(instr.Args)
-	if matches == nil {
-		return "", fmt.Errorf("invalid COPY --from format")
-	}
-
-	image := matches[1]
-
-	imageMatches := imageRegex.FindStringSubmatch(image)
-	if imageMatches == nil {
-		return "", fmt.Errorf("invalid image format: %s", image)
-	}
-
-	imageName := imageMatches[1]
-
-	if len(directive.Packages) == 0 {
-		return "", fmt.Errorf("no package directive found")
-	}
-
-	pkg := directive.Packages[0]
-	if pkg.Ignore {
-		return "", nil
-	}
-
-	var r resolver.Resolver
-	if strings.Contains(imageName, "ghcr.io") {
-		r = ghcr
-	} else {
-		r = dockerHub
-	}
-
-	latest, err := r.Resolve(ctx, imageName, pkg.Pattern)
-	if err != nil {
-		return "", err
-	}
-
-	return latest, nil
+	return runCheckPkl(ctx, run)
 }

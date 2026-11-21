@@ -1,402 +1,82 @@
 # Roadmap
 
-Where doneram is going and what has to be true at each step. The reasoning
-behind these choices lives in [generalizing.md](./generalizing.md); this file
-carries the plan and its exit criteria.
-
-## What doneram replaces, and what it does not
-
-Five hand-written scripts check pinned versions across the repos today, all
-built on one copied library:
-
-| File | Repo | Fate |
-| --- | --- | --- |
-| `scripts/freshness/checkers.py` | yak-shears, my_go_template, calcipy_template | Deleted, three copies |
-| `scripts/check_freshness.py` | yak-shears | Deleted |
-| `scripts/check_freshness.py` | my_go_template | Deleted |
-| `scripts/check_freshness.py` | calcipy_template | Deleted |
-| `scripts/check_cdnjs_updates.py` | calcipy_template | Deleted |
-
-Every capability they have maps onto doneram: GitHub release and
-commit-by-branch resolution, npm, CDNJS, regex extract and patch, multi-file
-grouped patching, hold semantics, version comparison, and report rendering.
-The one shape no locator can express is `uv tree --outdated`, which walks a
-whole dependency graph rather than reading a pin out of a file. That becomes
-a command resolver: doneram runs a command and parses name, current, and
-latest out of its output. `npm outdated`, `cargo outdated`, and
-`go list -m -u all` are the same shape.
+What doneram does not do yet, and the decisions that bound it. What has
+shipped is in [CHANGELOG.md](./CHANGELOG.md) and the README; the original
+reasoning is in [generalizing.md](./generalizing.md).
 
 ## Scope
 
 doneram tracks, updates, and validates dependency versions written as
-literals in text files. That is the whole job.
+literals in text files: anything it can find with a regex and resolve
+against a registry. It also does the small jobs package managers leave
+undone (raising a declared floor to what is locked, pinning a floating
+reference, moving a project to its template's newest release) and hands
+every install, resolve, and lock step back to the tool that owns it.
 
-**In scope.** Any version literal doneram can find with a regex and resolve
-against a registry: Dockerfile `FROM` tags and `apk add pkg=1.2.3` pins,
-mise tool versions, GitHub Action `uses:` SHAs, image tags in compose files,
-Helm values, and Kubernetes manifests, CDN URLs, and version defaults in
-shell scripts, jinja templates, and pkl.
+**Out of scope.** Dependency resolution, which uv, go, npm, and mise
+already do. Running containers for vulnerability data: image contents are
+read statically by a scanner (trivy or grype) when one is installed.
+Repo housekeeping beyond pins (syncing with origin, triaging CI, waiting
+on workflow runs) belongs to other tools.
 
-Also in scope, deliberately: the small jobs the package managers do not do.
-`uv sync --upgrade` moves `uv.lock` and never touches `pyproject.toml`,
-which is [astral-sh/uv#6794](https://github.com/astral-sh/uv/issues/6794),
-open, and worked around today by third-party tools
-([uv-bump](https://github.com/zundertj/uv-bump),
-[uv-upsync](https://github.com/pivoshenko/uv-upsync)). doneram raising a
-declared constraint in `pyproject.toml` and then shelling out to uv to
-re-lock is a real gap it can fill. The rule is to do as little as possible
-and hand the install, resolve, and lock steps back to the tool that owns
-them.
+## Next
 
-**Copier, narrowly.** A `.copier-answers.yml` `_commit` is a pin like any
-other: doneram reads it against the template's tags and hands the move to
-`copier update`. Resolving `.rej` conflicts stays with copier and the
-person running it.
+1. **Cloud-published versions, read-only.** A pin whose newest version
+   only the cloud provider knows, resolved with the SDK's default
+   credentials and skipped with a note when there are none. doneram never
+   writes to the account.
+   - AWS: AMI IDs in Terraform, CloudFormation, and Packer (EC2
+     `DescribeImages` by name and owner, or the public SSM parameters under
+     `/aws/service/`), digests for private ECR images, and end of life
+     from the provider itself (RDS and Aurora engine versions, EKS add-on
+     versions per cluster version) in place of endoflife.date.
+   - Google Cloud: GKE versions per release channel, Cloud SQL database
+     versions, and Artifact Registry digests.
+2. **Pre-release patterns.** `^` for release candidates, `&` for betas,
+   `!` for alphas, documented in the README and not yet parsed.
 
-**Out of scope.** Dependency resolution: doneram never
-reimplements what uv, go, npm, or mise already do. Container execution for
-vulnerability data, since the whole ecosystem reads image layers statically.
+## Open questions
 
-Everything the `freshen` skill does beyond pins stays with `freshen`:
-syncing repos with origin, running gates, triaging CI, waiting on workflow
-runs, commit hygiene, and `.freshen.md` logging. The comparison is only
-useful for drawing this line, and past this point the two are unrelated
-tools.
+- Whether GitHub's dependency graph raises alerts for action pins
+  submitted as `pkg:githubactions/owner/repo@vX.Y.Z` (`--snapshot`). Not
+  yet verified against a real advisory.
+- Hold ceilings past an exclusive `<`: whether `<=`, ranges, or several
+  clauses are worth supporting.
+- An SBOM of a repo's own pins (CycloneDX from the config plus resolved
+  versions), only if something consumes it.
+- Caching advisory results. A weekly run against OSV's batch endpoint is
+  cheap enough that it has not mattered.
 
-**Deferred.** Terraform and Pulumi provider and module constraints. The
-version half works with a locator today; the vulnerability half has no OSV
-ecosystem, so it needs its own source.
+## Not planned
 
-**Needs a new syntax.** `package.json` has no comments, so a repo pinning
-through npm or pnpm cannot carry a `# doneram:` directive. Those pins are
-declared in config, or in a dedicated key inside the manifest, rather than
-inline.
+- **Pulumi.** Its providers are npm, PyPI, and Go packages, already
+  covered through lockfiles and declared ranges.
+- **Stripe API versions.** Stripe publishes no machine-readable list.
+- **Native PR creation.** doneram writes a JSON summary with grouped
+  branches, titles, and bodies, and a workflow step opens the PRs.
+- **Terraform advisories.** Providers and modules have no OSV ecosystem;
+  their versions are tracked, their vulnerabilities are not.
 
-## Update policy
+## Decisions
 
-Three orthogonal controls, all per-tool with a global default.
-
-**Constraint.** The version pattern (`3.13.#`) bounds what an update may
-move to. A hold adds a ceiling with a reason attached.
-
-**Minimum release age.** A new version must have been public for a set
-period before doneram proposes it, which is the cheap defense against a
-compromised or immediately-yanked release. A version that fixes a published
-CVE overrides the wait, and the report says plainly that it did, so a rushed
-security release is never taken silently.
-
-The ecosystem converged on this while doneram was being built. Dependabot
-now waits three days by default with no configuration, Renovate has
-`minimumReleaseAge`, pnpm 10.16 has `minimumReleaseAge`, and Yarn 4.10 has
-`npmMinimalAgeGate`, and all of them exempt security updates. A review of 21
-reported supply chain incidents found the malicious versions were pulled
-within hours of publication. doneram's default follows Dependabot at three
-days rather than the 24 hours planned here.
-
-`--min-age` ships with that 72h default and applies wherever the registry
-publishes a release date, which today is GitHub Releases. A project that
-only cuts tags has no date to read, and a repo whose every matching release
-sits inside the window offers nothing rather than falling through to
-`/tags`, which would hand back the release just held. When the newest
-release outside the window predates the pin itself, which happens the week
-a repo adopts its own fresh release, the pin is kept and reported as
-behind rather than patched backwards.
-
-The security exemption shipped: a vulnerable pin whose normal update is held
-by the cooldown, or stops short of the fix, moves to the minimum release
-that clears its advisories, and the PR lists it under *Security fixes*
-marked as ahead of --min-age. A github-action fix is resolved from its tag
-back to a SHA through `resolver.Pinner`. A hold is never crossed for it.
-
-**Yanked versions.** doneram checks yank status both ways: never propose a
-yanked version, and flag a currently-pinned version that has since been
-yanked, since that one is already installed everywhere. Shipped for PyPI,
-crates.io, and npm (whose closest analogue is a deprecated version) through
-`resolver.YankChecker`; a withdrawn pin moves back to the newest standing
-release.
-
-## Next: the agreed build order
-
-Agreed after M6 shipped, built in this order, one merged PR each. Every
-item keeps the rule above: doneram finds and decides, and the tool that
-owns a file does the resolving.
-
-1. **Lockfile CVE scan. Shipped.** Every package in uv/poetry/pdm/Cargo
-   lockfiles, package-lock, pnpm-lock, go.mod, Gemfile.lock, and
-   composer.lock is checked against OSV in one batch, and `update` raises a
-   vulnerable one through the lockfile's own package manager. Building it
-   surfaced that the minimum fix only cleared the first advisory a pin had,
-   not all of them, which is fixed for pins too.
-2. **Pin hardening. Shipped.** `doneram pin` (and `update`, before it
-   checks) turns `@v4` into `<sha> # v4.2.2`, naming the exact release the
-   floating tag points at, a mise prefix or `latest` into the version mise
-   resolves, and a Dockerfile or compose image tag into `tag@sha256:`.
-   `update` re-resolves every digest after patching, so a moved tag never
-   keeps a stale digest and a same-tag rebuild arrives as a PR row.
-   `--fail-on-unpinned` gates it.
-3. **End of life with no config. Shipped.** mise runtimes, base images,
-   runner labels, language floors (`requires-python`, `engines.node`, the
-   `go` directive), and LLM model IDs in code are matched to their
-   endoflife.date product and reported when past or within 90 days of end
-   of life; `--fail-on-eol` gates it. Reported, never bumped: a runtime or
-   model move is a migration.
-4. **PR shape, kept lean. Shipped.** A plan run splits its changes into
-   groups (`updates`, `review-<tool>`, `failing-<tool>`) that a workflow
-   matrix opens as separate PRs through `update --plan --group`. A
-   `validate` command that fails is bisected over git snapshots, and each
-   offending bump becomes its own PR carrying the failure. No auto-merge
-   and no policy table: GitHub rulesets already decide what merges.
-5. **Declared-constraint bump plus relock. Shipped.** For each
-   `pyproject.toml` + uv.lock, `package.json` + package-lock or pnpm-lock,
-   and `go.mod`, `update` runs the package manager's own upgrade within
-   the declared ranges, raises every declared floor to the version now
-   locked (the uv#6794 gap), and relocks. The Go module upgrade, toolchain
-   retry included, moved out of the freshness workflow into doneram. A new
-   major outside a declared range becomes a `review-<tool>` PR that widens
-   the range itself.
-6. **Provenance. Shipped.** Verify npm and PyPI attestations and GitHub release
-   attestations; flag a new version that lost provenance or changed
-   publisher, before it is proposed.
-7. **Changelog risk beyond actions. Shipped.** Extend the safe/review/breaking grade
-   to PyPI, npm, and cargo majors by mining release notes and changelogs.
-8. **Fleet CLI. Shipped.** `doneram fleet` runs over the local checkouts
-   in a directory, chosen by regex: one report (markdown and JSON) shows
-   stale, vulnerable, floating, and end-of-life pins per repo, and
-   `--apply` commits each clean repo's updates on `doneram/updates`
-   without touching the checked-out branch or pushing anything.
-9. **IaC and other toil.** Shipped so far: end of life for Lambda
-   runtimes, RDS/Aurora, EKS, ElastiCache, and OpenSearch versions in
-   Terraform, CloudFormation/SAM, and Serverless files, and pinned GitHub
-   REST API versions. Then Terraform provider and module pins
-   (exact and `~>` forms) and copier template drift, applied by `copier
-   update`. Remaining: Pulumi, AMI IDs and SSM public parameters, and Stripe
-   API versions, which publish no machine-readable list.
-
-## Decisions this plan assumes
-
-- Resolvers shell out to `mise` where the tool is in its registry, natively
-  otherwise. `mise registry <tool>` gives the backend and upstream ref for
-  the handoff, `mise ls-remote` gives the full version list a constraint can
-  filter.
-- Config is pkl, evaluated by shelling out to `pkl eval -f json`. pkl-go
-  bindings if the subprocess cost ever matters.
-- Comment directives compile into locators. One execution engine, two front
-  ends.
-- doneram emits a JSON summary; a workflow action opens the PR.
-- A hold carries a reason and a ceiling: `hold[breaking changes; <3.0.0]`
-  keeps taking 2.x updates and refuses to cross 3.0.
-- `--fail-on-drift` is opt-in, so both existing CI conventions work.
-- Vulnerability data comes from OSV and an image scanner, not from
-  Dependabot, which cannot see most of these pins at all.
-- Build validation stops being the headline and becomes one validation
-  command among several. Managing versions is the value.
-
-## M5.5: Fleet correctness and ergonomics
-
-Wave 1 and wave 2 shipped, and running doneram across 13 repos exposed gaps
-no single-repo milestone could surface.
-
-### The `ecosystem` field cannot be set
-
-`engine.Site.Ecosystem` exists and the loader reads it, but no config
-declares it, so M6's OSV lookup only fires where a resolver kind carries a
-default mapping. Of 82 resolver declarations across the fleet, 54 are
-`github-action`, 13 `github-release`, 10 `mise`, and 2 `npm`. Two pins are
-eligible for an advisory query.
-
-### `GITHUB_OUTPUT` uses a fixed heredoc delimiter
-
-Resolver-supplied text goes into `body<<DONERAM_EOF`. A version string or
-command output containing that line, or a newline inside a title, writes
-arbitrary step outputs. The delimiter should be random per run, and a title
-containing a newline should be rejected.
-
-### Directives only reach Dockerfiles
-
-`# doneram:` parses inside a Dockerfile and attaches only to `FROM` and
-`COPY --from`. It cannot annotate a mise.toml pin, a workflow `uses:` line,
-a shell variable default, or a CDN URL, which covers every pin shape the
-fleet actually has, so all real usage is pkl config. `hold[reason; <ceiling]`
-is reachable only through a directive, which is why yak-shears' htmx ceiling
-is a bare `2.#.#` with a TODO comment rather than a hold carrying its reason.
-
-Either the directive front end generalizes to any comment-bearing line, or
-it stops being a headline feature and pkl becomes the only interface. What
-is not defensible is a syntax documented as general that works on one file
-type nobody pins through.
-
-### Smaller edges
-
-`--config`, `--only <tool>`, `--fail-on-drift`, a `--format json` the config
-path honors, an honest root usage string, and a report that collapses a
-tool's repeated verdicts into one line (26 lines for 45 sites) have shipped.
-Each updated GitHub pin now carries a compare link in the PR body. What
-remains:
-
-- `check --apply` and `update` do the same thing on the config path
-- `internal/builder` holds its coverage near 30% because Build, Validate,
-  and Cleanup shell out to `docker` with no seam. A command-runner
-  interface would let the gate rise
-- `go` is not pinned in `mise.toml`, so a local toolchain can drift from
-  the `go.mod` version CI builds against. CI and every workflow now read
-  `go-version-file: go.mod`, so the weekly gomod step is the only owner
-
-Shipped since: distinct exit codes per failure kind plus a
-`--fail-on-vuln` CVE gate, discovery of SHA-pinned actions and mise tools with no
-config, pins keeping the precision they were written with (`v2.12` moves to
-`v2.15`), one PR row per distinct move rather than per site, and a major
-action bump graded safe, review, or breaking against how the workflow uses
-the action's inputs and outputs.
-
-Done when every pin in the fleet is eligible for an advisory lookup.
-
-## M6: Vulnerability awareness
-
-The reason this milestone exists: Dependabot cannot see most of what doneram
-manages. It reads language manifests in a repo. It does not know what is
-inside `python:3.13-slim`, what `apk add` installed three layers down, or
-which base image tag a compose file names. Those pins can sit vulnerable
-indefinitely with nothing complaining.
-
-### Where the data comes from
-
-[OSV.dev](https://osv.dev) answers for every ecosystem doneram already
-resolves, verified against the live API:
-
-| Pin | Query | Advisories |
-| --- | --- | --- |
-| `requests 2.19.0` | PyPI | 10 |
-| `lodash 4.17.15` | npm | 6 |
-| `golang.org/x/net 0.17.0` | Go | 18 |
-| `curl 7.88.1-10` | `Debian:12` | 43 |
-| `busybox 1.36.1-r15` | `Alpine:v3.19` | 6 |
-
-Distro ecosystems are first-class, which is the case that matters most here.
-Advisories carry CVSS severity and a `fixed` event, so the minimum patched
-version is computed rather than looked up. `/v1/querybatch` takes many
-queries in one round trip, so a whole Dockerfile costs one request.
-
-OSV cannot go from an image tag to a package list. Nothing can, without
-reading the image. Docker Scout and ECR enhanced scanning both do this
-statically: Scout uses the image's SBOM attestation when present and indexes
-the layers otherwise, then matches against NVD, the GitHub Advisory
-Database, and vendor feeds. Neither runs the container. So doneram shells
-out to trivy or grype, consistent with the mise, uv, and pkl decisions, and
-maps their findings back to the pins it manages.
-
-This is also why `internal/builder/query.go`, which boots a container to ask
-apk or apt what is installed, does not get extended here. It answers a
-version question, and vulnerability data is read from layers.
-
-### Behavior
-
-- A vulnerable pin reports two candidate versions, labeled: the minimum
-  patched version, and the latest version matching the pin's own pattern.
-  The choice between a small fix and a normal update stays explicit.
-- A pin held below a ceiling whose only fix is above it is reported loudly,
-  never overridden. A hold exists because crossing it breaks the build, and
-  doneram cannot know whether the CVE is reachable in your code. The report
-  says held, vulnerable, and no fix under the ceiling.
-- A CVE fix waives the minimum release age, and the report says it did.
-- Severity, advisory ID, and a link travel with every finding, so the report
-  is actionable without a second lookup.
-
-### GitHub Actions coverage, shipped
-
-OSV defines a `GitHub Actions` ecosystem whose package name is
-`{owner}/{repo}`, and the advisories are real: `GHSA-mrrh-fwg8-r2c3`, the
-March 2025 tj-actions/changed-files compromise, carries a well-formed
-`introduced: 0` / `fixed: 46.0.1` range. A versioned `querybatch` for
-`tj-actions/changed-files` at `45.0.7` returns nothing, while the same
-package queried without a version returns the advisory. OSV has no version
-comparator registered for that ecosystem, which matches osv-scanner's own
-fix note about avoiding parse errors on unsupported GitHub Actions version
-ranges.
-
-So doneram queries action pins by package alone and evaluates the ranges
-with `pkg/version`, which it already had for constraint filtering. That
-turns 54 of the fleet's 82 pins from ineligible into covered, the single
-largest coverage win available. `pkg/version` learned to ignore a leading
-`v` in the same change, without which every tag compared as 0.0.0.
-
-The pin itself is a SHA with the version in a trailing comment
-(`c2a8761… # v4.3.0`), so the advisory query reads the version out of the
-comment. A SHA with no comment cannot be checked, which is one more reason
-the comment stays required.
-
-### Feeding GitHub's own graph
-
-A second, complementary channel: the [dependency submission
-API](https://docs.github.com/en/rest/dependency-graph/dependency-submission)
-takes a snapshot of purl-identified dependencies against a commit, and
-submitted dependencies receive Dependabot alerts and security updates for
-any ecosystem the GitHub Advisory Database covers. doneram already knows
-every pin, its resolver, and its version, which is exactly a snapshot.
-
-The appeal is that alerting, deduplication, and dismissal then live in the
-GitHub UI beside every other alert, rather than in a PR body doneram
-renders. The catch is purl coverage: purl-spec defines `github`, `golang`,
-`pypi`, `npm`, `docker`, and `oci`, and defines no GitHub Actions type at
-all. Whether GitHub's graph accepts a non-standard `pkg:githubactions/...`
-is untested and has to be verified against a real repository before this is
-promised.
-
-Shipped as `--snapshot`, plus a workflow that posts it on every push to
-main. Action pins are submitted as `pkg:githubactions/owner/repo@vX.Y.Z`,
-the form GitHub's own Actions dependency graph uses; whether alerts fire for
-them is verified by the first submission.
-
-### SBOM
-
-Two shapes, and doneram should not confuse them.
-
-For a base image, doneram shells out rather than reading layers itself, per
-the mise, uv, and pkl precedent. syft plus grype splits generation from
-scanning, so the SBOM is an artifact other tools can consume; trivy does
-both in one binary and also emits SPDX, CycloneDX, and GitHub's
-dependency-snapshot format directly. Both produce SPDX 2.3 and CycloneDX
-1.6. trivy's snapshot output is the cheapest path to the submission API
-above, and grype's curated database is the quieter one for alerting. The
-scanner is detected, not required, which is what `vulnscan.Detect` already
-does.
-
-For doneram's own pins, an SBOM is a rendering of the config plus resolved
-versions, and needs no scanner at all. Emitting CycloneDX from a
-`.doneram.pkl` gives a repo an inventory of everything Dependabot cannot
-see, which is the same data the submission API wants. Worth doing only if
-something consumes it.
-
-### Open questions
-
-- Terraform and Pulumi have no OSV ecosystem at all
-- Whether GitHub's dependency graph accepts an action pin as a purl
-- Whether to cache advisory results, given a weekly run against a batch
-  endpoint is already cheap
-
-Done when a Dockerfile pin with a known CVE in its base image reports the
-advisory, its severity, and both candidate versions, and a held pin with no
-fix under its ceiling is visible as such.
-
-## Deferred
-
-- Native PR creation. The JSON contract plus an action works. Revisit when
-  the workflow boilerplate is visibly repeated across repos.
-- A fleet view. 13 repos each run their own workflow and open their own PR,
-  with no way to ask what is stale everywhere without 13 checkouts. Mostly
-  falls out of `--config` plus a report mode.
-- Release notes in the PR body. doneram knows the resolver and both
-  versions, so a compare link or a release-page link costs nothing and is
-  what a reviewer actually wants.
-- An SBOM of a repo's own pins, if anything consumes it.
-- Hold ceiling syntax past exclusive `<`. Whether `<=`, ranges, or several
-  clauses are worth supporting is undecided.
-- Which files doneram writes for uv. Raising a `pyproject.toml` constraint
-  and handing the lock back to uv is agreed; the split between the two is
-  not drawn.
-- pkl-go bindings.
-- Exporting the changelog on breaking changes, to help with upgrades.
-- Terraform and Pulumi pins, version half and vulnerability half both.
-- Generalizing validation commands beyond Docker build and healthcheck.
-  Formatters and syntax checks (`ruff`, `tombi`, `pkl eval`) are the obvious
-  next instances, since a bumped pin that breaks a config file should fail
-  before it reaches a PR.
+- **Config is pkl**, evaluated with `pkl eval -f json`. pkl-go bindings
+  only if the subprocess cost ever matters.
+- **Comment directives and config compile to the same sites.** One engine:
+  a Dockerfile directive and a config entry get the same resolution,
+  cooldown, advisories, provenance, and PR groups.
+- **Resolvers shell out to mise** where a tool is in its registry, and use
+  the upstream registry natively otherwise.
+- **The minimum release age defaults to three days**, matching Dependabot.
+  A version that fixes a published advisory skips the wait, and the PR
+  says so. A hold is never crossed for a fix.
+- **A hold carries its reason and a ceiling.** `hold[reason; <3.0.0]` keeps
+  taking 2.x and reports the reason every run, so it cannot rot silently.
+- **Gates are opt-in** (`--fail-on-drift`, `--fail-on-vuln`,
+  `--fail-on-eol`, `--fail-on-unpinned`), so a repo chooses between a red
+  CI job and a pull request.
+- **Merging is GitHub's job.** doneram splits changes into `updates`,
+  `review-<tool>`, and `failing-<tool>` PRs; rulesets decide what merges.
+- **End of life and runtime moves are reported, never bumped.** A runtime
+  or model change is a migration, not a pin update.
+- **A template owns the pins in the files it renders.** They move in the
+  template and reach projects through `copier update`.

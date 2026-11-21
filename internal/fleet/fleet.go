@@ -201,10 +201,12 @@ func applyRepo(ctx context.Context, dir string, check Check, rep *RepoReport) {
 	if len(res.Changes) > 0 {
 		msg += "\n\n- " + strings.Join(res.Changes, "\n- ")
 	}
+	// The repo's own commit hooks run: a hook that rejects the updates is
+	// a failure to report, not a check to skip.
 	sha := ""
 	for _, args := range [][]string{
 		{"add", "--all"},
-		{"commit", "--quiet", "--no-verify", "-m", msg},
+		{"commit", "--quiet", "-m", msg},
 		{"rev-parse", "HEAD"},
 	} {
 		if sha, err = git(ctx, dir, args...); err != nil {

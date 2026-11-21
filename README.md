@@ -13,8 +13,8 @@ Everything else is declared in the repo's config.
 Beyond declared pins, doneram scans lockfiles for advisories, raises
 declared floors and relocks, pins floating references, reports end-of-life
 runtimes, and moves projects to their copier template's newest release.
-[ROADMAP.md](./ROADMAP.md) draws the full in-scope and out-of-scope line and
-carries the milestones. The design reasoning is in
+[ROADMAP.md](./ROADMAP.md) draws the in-scope and out-of-scope line and lists
+what is next. The original design reasoning is in
 [generalizing.md](./generalizing.md).
 
 ## Installation
@@ -41,7 +41,11 @@ Download from [GitHub Releases](https://github.com/kyleking/doneram/releases).
 # doneram: <package-name>:<version-pattern>
 ```
 
-The directive applies to the next line.
+The directive applies to the `FROM` or `COPY --from` line after it. Every
+Dockerfile in the repo is read (`Dockerfile`, `Dockerfile.*`, and
+`*.Dockerfile`, outside vendored, build, and test-fixture directories), and
+each directive becomes a site like any declared in config, so it gets the
+same release-age wait, advisory check, provenance check, and PR grouping.
 
 ```dockerfile
 # doneram: uv:0.9.#
@@ -63,13 +67,6 @@ FROM golang:1.22-alpine3.19 AS builder
 
 Pre-release suffixes are planned: `^` for release candidates, `&` for
 betas, `!` for alphas.
-
-### Several packages on one line
-
-```dockerfile
-# doneram: bash:#.#.#, curl:#.#.#, git:ignore
-RUN apk add --no-cache bash curl git
-```
 
 ### Not updating something
 
@@ -97,6 +94,7 @@ Most pins need no config. doneram finds and checks these on its own:
   `.github/workflows/`, `.github/actions/*/action.yml`, and a root
   `action.yml`. A SHA without its version comment is left alone; a
   mutable tag is pinned first (below).
+- `# doneram:` directives in Dockerfiles (above).
 - Plain versions under `[tools]` in `mise.toml`, and in `.tool-versions`.
   `latest`, `lts`, and arrays are not pins and are skipped.
 
@@ -280,10 +278,9 @@ doneram says so, because tracking a tag beats tracking a moving branch.
 ## CLI
 
 ```bash
-# Check the repo config plus discovered pins, or ./Dockerfile if there is no config
+# Check the repo config plus discovered pins (Dockerfile directives included)
 doneram check
 
-doneram check -f docker/api/Dockerfile
 doneram check --config path/to/.doneram.pkl
 doneram check --only jq --only hk
 doneram check --format json
@@ -292,9 +289,8 @@ doneram check --fail-on-vuln
 doneram check --snapshot snapshot.json
 doneram check --min-age 0
 
-# Patch in place
-doneram update -f Dockerfile
-doneram update --skip-build
+# Patch in place, relock, and run the config's validate command
+doneram update
 ```
 
 `--only` narrows a run to named tools and fails on a name the config does
@@ -673,9 +669,11 @@ you are on and your working tree are untouched. A repo with uncommitted
 changes, or with `doneram/updates` checked out, is skipped. Nothing is
 pushed and no PR is opened; the report gives each repo's commit.
 
-The exit is non-zero (4) only when a repo failed outright. Comment
-directives in a Dockerfile of a repo with no `.doneram.pkl` are not read
-by `fleet`; give that repo a config, or run `update` there.
+The commit runs the repo's own hooks; a hook that rejects it fails that
+repo, and its branch and tree are restored. `--min-age` works as it does
+for `check`.
+
+The exit is non-zero (4) only when a repo failed outright.
 
 ## Validation
 
@@ -689,10 +687,10 @@ split and the updates PR says so. Lockfile fixes, declared-floor syncs,
 pinned references, and `afterPatch` run in every trial, so a bump is only blamed for what it
 changes.
 
-Separately, an update can declare a command that must pass before it is kept. For a
-Docker pin that is a build plus the image's HEALTHCHECK, which catches a
-tag that no longer builds. Elsewhere it is whatever proves the file still
-works: a config parse, a formatter, a generated project's own CI.
+The command is whatever proves the repo still works: a test suite, a config
+parse, a formatter, a generated project's own CI. For a base image bump
+that is a build, `validate = "docker build ."`, which catches a tag that
+no longer builds.
 
 Validation is optional per tool. A bumped CDN URL or Action SHA has nothing
 to build, and doneram reports those as updated but unvalidated rather than

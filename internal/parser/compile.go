@@ -64,7 +64,7 @@ func CompileLocators(path string, df *Dockerfile) []CompiledSite {
 		sites = append(sites, CompiledSite{
 			Tool:         tool,
 			ResolverName: imageName,
-			Constraint:   pkg.Pattern,
+			Constraint:   keepVariant(pkg.Pattern, version),
 			Locator: locator.Locator{
 				Glob:     path,
 				Pattern:  pattern,
@@ -131,5 +131,19 @@ func linePattern(raw, version string) (string, error) {
 	}
 	prefix := regexp.QuoteMeta(raw[:idx])
 	suffix := regexp.QuoteMeta(raw[idx+len(version):])
-	return "^" + prefix + "(" + regexp.QuoteMeta(version) + ")" + suffix + "$", nil
+	return "(?m)^" + prefix + "(" + regexp.QuoteMeta(version) + ")" + suffix + "$", nil
+}
+
+// keepVariant carries a tag's variant ("-slim", "-alpine3.20") into a
+// pattern that names none, so `python:3.13.#` on `3.13.1-slim` moves to
+// the next slim tag rather than to the full image. A pattern with its own
+// suffix (`-alpine*`) already says which variants it takes.
+func keepVariant(p *VersionPattern, tag string) *VersionPattern {
+	_, variant, ok := strings.Cut(tag, "-")
+	if p == nil || p.Suffix != "" || !ok || variant == "" {
+		return p
+	}
+	kept := *p
+	kept.Suffix = variant
+	return &kept
 }
