@@ -83,6 +83,7 @@ func runExplain(ctx context.Context, w io.Writer, dir, tool, base string, valida
 
 	var results []engine.SiteResult
 	var listing strings.Builder
+	listed := map[string]bool{}
 	var from, to string
 	for _, s := range sites {
 		matches, err := locator.Find(s.Locator)
@@ -100,7 +101,15 @@ func runExplain(ctx context.Context, w io.Writer, dir, tool, base string, valida
 			baseMatches[i].Value = old
 		}
 		results = append(results, engine.SiteResult{Site: s, Matches: baseMatches, Latest: matches[0].Value})
-		listing.WriteString(joinMatches(dir, matches))
+		// Two patterns can pin the same line (a URL and a package spec on
+		// one import), so each line is listed once.
+		for _, m := range matches {
+			key := fmt.Sprintf("%s:%d", m.File, m.Line)
+			if !listed[key] {
+				listed[key] = true
+				listing.WriteString(joinMatches(dir, []locator.Match{m}))
+			}
+		}
 	}
 	if len(results) == 0 {
 		return &ExitError{Code: ExitMismatch, Err: fmt.Errorf("no site for %s matches anything on disk", tool)}

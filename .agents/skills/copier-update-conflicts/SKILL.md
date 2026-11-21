@@ -11,7 +11,14 @@ either inline conflict markers or a `<file>.rej` beside the file. Each one is
 a question: should this project take the template's version, keep its own,
 or combine them?
 
-## 1. Find every conflict
+## 1. Read the project's own rules
+
+Check `AGENTS.md` (or `CLAUDE.md`) for a section on template updates first. A
+template often documents files that always conflict, values copier resets
+(a version reset to `0.0.0`), and which side wins; those rules override the
+defaults below.
+
+## 2. Find every conflict
 
 ```sh
 grep -rn '^<<<<<<< \|^>>>>>>> ' --exclude-dir=.git .   # inline markers
@@ -23,7 +30,7 @@ Read the template's release notes or its diff between the old and new
 `_commit` (the `_src_path` repository) so you know what each template
 change was for.
 
-## 2. Resolve each one
+## 3. Resolve each one
 
 For every hunk, decide:
 
@@ -40,7 +47,7 @@ Apply each `.rej` hunk by hand (it is a unified diff against the file beside
 it), then delete the `.rej`. Remove every conflict marker. Do not delete a
 `.rej` without deciding what to do with its hunk.
 
-## 3. Flag backports
+## 4. Flag backports
 
 A local change that any project generated from this template would want is
 a template bug: the next update will conflict on it again in every project.
@@ -48,7 +55,7 @@ When you keep a local version because it is better in general, not because
 of this project, list it as a backport candidate with the file, the change,
 and why it generalizes. Do not edit the template repository from here.
 
-## 4. Prove it
+## 5. Prove it
 
 Run the project's validation (`validate` in `.doneram.pkl`, or its CI
 command, for example `mise run ci`) and make sure it passes. Confirm no
@@ -58,7 +65,7 @@ markers or `.rej` files remain:
 ! grep -rln '^<<<<<<< \|^>>>>>>> ' --exclude-dir=.git . && ! find . -name '*.rej' -not -path './.git/*' | grep -q .
 ```
 
-## 5. Hand back
+## 6. Hand back
 
 Commit on the same branch (`chore: resolve <template> <version> update`)
 and summarize each resolved conflict (took template, kept local, combined),
