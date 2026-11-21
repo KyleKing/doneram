@@ -2,7 +2,6 @@ package resolver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -15,6 +14,7 @@ import (
 type PyPIResolver struct {
 	client  *http.Client
 	baseURL string
+	docs    docCache
 }
 
 func NewPyPIResolver(client *http.Client) *PyPIResolver {
@@ -36,38 +36,55 @@ func (r *PyPIResolver) Name() string {
 }
 
 type pypiResponse struct {
-	Releases map[string][]interface{} `json:"releases"`
+	Releases map[string][]pypiFile `json:"releases"`
+}
+
+type pypiFile struct {
+	Yanked       bool    `json:"yanked"`
+	YankedReason *string `json:"yanked_reason"`
+}
+
+// yanked reports whether every file of a release is yanked, which is what
+// PEP 592 means by a yanked release, and the reason given for it.
+func pypiYanked(files []pypiFile) (string, bool) {
+	if len(files) == 0 {
+		return "", false
+	}
+	reason := ""
+	for _, f := range files {
+		if !f.Yanked {
+			return "", false
+		}
+		if f.YankedReason != nil && *f.YankedReason != "" {
+			reason = *f.YankedReason
+		}
+	}
+	return reason, true
+}
+
+func (r *PyPIResolver) fetch(ctx context.Context, pkg string) (pypiResponse, error) {
+	body, err := r.docs.get(ctx, r.client, fmt.Sprintf("%s/pypi/%s/json", r.baseURL, pkg), "PyPI registry", "package "+pkg, nil)
+	if err != nil {
+		httpclient.LoggerFromContext(ctx).Warn("failed to fetch PyPI data", "package", pkg, "error", err)
+		return pypiResponse{}, err
+	}
+	return decodeDoc[pypiResponse](body, "PyPI")
 }
 
 func (r *PyPIResolver) Resolve(ctx context.Context, pkg string, pattern *parser.VersionPattern) (string, error) {
 	logger := httpclient.LoggerFromContext(ctx)
 	logger.Debug("resolving package", "resolver", "pypi", "package", pkg)
 
-	url := fmt.Sprintf("%s/pypi/%s/json", r.baseURL, pkg)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	data, err := r.fetch(ctx, pkg)
 	if err != nil {
-		return "", fmt.Errorf("creating request: %w", err)
-	}
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		logger.Warn("failed to fetch PyPI data", "package", pkg, "error", err)
-		return "", fmt.Errorf("fetching PyPI data: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("PyPI registry unavailable (status %d) for package %s: retry later", resp.StatusCode, pkg)
-	}
-
-	var data pypiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return "", fmt.Errorf("decoding PyPI response: %w", err)
+		return "", err
 	}
 
 	versions := make([]string, 0, len(data.Releases))
-	for v := range data.Releases {
+	for v, files := range data.Releases {
+		if _, yanked := pypiYanked(files); yanked {
+			continue
+		}
 		versions = append(versions, v)
 	}
 
@@ -83,6 +100,16 @@ func (r *PyPIResolver) Resolve(ctx context.Context, pkg string, pattern *parser.
 	}
 
 	return "", fmt.Errorf("no matching version found for package %s with pattern %v", pkg, pattern)
+}
+
+// Yanked reports whether the pinned release has been yanked since.
+func (r *PyPIResolver) Yanked(ctx context.Context, pkg, v string) (string, bool, error) {
+	data, err := r.fetch(ctx, pkg)
+	if err != nil {
+		return "", false, err
+	}
+	reason, yanked := pypiYanked(data.Releases[v])
+	return reason, yanked, nil
 }
 
 func (r *PyPIResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {

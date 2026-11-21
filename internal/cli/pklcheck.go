@@ -55,10 +55,12 @@ type pklSummary struct {
 }
 
 type pklSiteSummary struct {
-	Tool            string `json:"tool"`
-	Current         string `json:"current,omitempty"`
-	Latest          string `json:"latest,omitempty"`
-	Behind          string `json:"behind,omitempty"`
+	Tool    string `json:"tool"`
+	Current string `json:"current,omitempty"`
+	Latest  string `json:"latest,omitempty"`
+	Behind  string `json:"behind,omitempty"`
+	// Yanked is the registry's reason the pinned version was withdrawn.
+	Yanked          string `json:"yanked,omitempty"`
 	Updated         bool   `json:"updated"`
 	needsUpdate     bool
 	Held            string           `json:"held,omitempty"`
@@ -433,6 +435,9 @@ func reportSiteResult(out report, result engine.SiteResult, vuln vulncheck.Resul
 	if result.Detail != "" {
 		out.printf("    %s\n", result.Detail)
 	}
+	if result.Yanked != "" && len(result.Matches) > 0 {
+		out.printf("    ! pinned %s has been withdrawn by the registry: %s\n", result.Matches[0].Value, result.Yanked)
+	}
 
 	reportVulnerabilities(out, result, vuln)
 }
@@ -495,6 +500,7 @@ func summarizeSite(result engine.SiteResult, vuln vulncheck.Result) pklSiteSumma
 		Tool:           result.Site.Tool,
 		Latest:         result.Latest,
 		Behind:         result.Behind,
+		Yanked:         result.Yanked,
 		Detail:         result.Detail,
 		PatchedVersion: vuln.PatchedVersion,
 		HeldVulnerable: vuln.HeldVulnerable,
@@ -719,6 +725,9 @@ func rowNote(r pklSiteSummary) string {
 		if r.WaivedMinAge {
 			parts = append(parts, "*ahead of --min-age*")
 		}
+	}
+	if r.Yanked != "" {
+		parts = append(parts, "current pin withdrawn: "+r.Yanked)
 	}
 	switch actionrisk.Level(r.Risk) {
 	case actionrisk.Safe:

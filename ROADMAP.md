@@ -107,7 +107,10 @@ back to a SHA through `resolver.Pinner`. A hold is never crossed for it.
 
 **Yanked versions.** doneram checks yank status both ways: never propose a
 yanked version, and flag a currently-pinned version that has since been
-yanked, since that one is already installed everywhere.
+yanked, since that one is already installed everywhere. Shipped for PyPI,
+crates.io, and npm (whose closest analogue is a deprecated version) through
+`resolver.YankChecker`; a withdrawn pin moves back to the newest standing
+release.
 
 ## Decisions this plan assumes
 

@@ -285,9 +285,11 @@ the pull request lists it under *Security fixes*, marked *ahead of
 --min-age*. Only the smallest fixing release is taken early; the rest of the
 cooldown still applies to everything newer.
 
-**Yanked versions** are checked both ways. doneram never proposes one, and
-reports a currently-pinned version that has since been yanked, because that
-one is already installed everywhere.
+**Yanked versions** are checked both ways, on PyPI and crates.io (yanked)
+and npm (deprecated). doneram never proposes one, and reports a pinned
+version that has since been withdrawn, with the registry's reason, because
+that one is already installed everywhere. A withdrawn pin is the one case
+doneram moves backwards, to the newest release still standing.
 
 ## End of life
 

@@ -75,6 +75,10 @@ type SiteResult struct {
 	// the newest one outside the window predates it. Latest is left empty
 	// so the pin is never patched backwards.
 	Behind string
+	// Yanked is set when the registry has withdrawn the version on disk
+	// (yanked on PyPI or crates.io, deprecated on npm), holding the reason
+	// the registry gives, or "yanked" when it gives none.
+	Yanked string
 }
 
 // ResolverLookup returns the resolver for a locator's Resolver kind, or
@@ -117,6 +121,7 @@ func RunSites(ctx context.Context, sites []Site, lookup ResolverLookup, opts ...
 		lookup:   lookup,
 		resolved: newMemo[resolveKey, string](),
 		detailed: newMemo[detailKey, string](),
+		yanked:   newMemo[detailKey, string](),
 		commands: newMemo[string, []byte](),
 	}
 
@@ -154,6 +159,7 @@ type siteRunner struct {
 	lookup   ResolverLookup
 	resolved *memo[resolveKey, string]
 	detailed *memo[detailKey, string]
+	yanked   *memo[detailKey, string]
 	commands *memo[string, []byte]
 }
 
@@ -202,7 +208,10 @@ func (r *siteRunner) site(ctx context.Context, s Site) SiteResult {
 	if len(matches) > 0 {
 		current = matches[0].Value
 	}
-	if IsOlder(latest, current) {
+	r.checkYanked(ctx, res, key, current, &result)
+	// Moving backwards is right only off a withdrawn version: the newest
+	// release still standing is then the one to pin.
+	if IsOlder(latest, current) && result.Yanked == "" {
 		result.Behind = latest
 		return result
 	}
@@ -279,4 +288,27 @@ func matchPrecision(latest, current string) string {
 		trimmed = "v" + trimmed
 	}
 	return trimmed
+}
+
+// checkYanked records whether the pinned version has been withdrawn. A
+// lookup failure is not the site's failure: the version answer stands, and
+// yank status is advisory.
+func (r *siteRunner) checkYanked(ctx context.Context, res resolver.Resolver, key resolveKey, current string, result *SiteResult) {
+	checker, ok := res.(resolver.YankChecker)
+	if !ok || current == "" {
+		return
+	}
+	reason, err := r.yanked.do(detailKey{resolveKey: key, current: current}, func() (string, error) {
+		reason, yanked, err := checker.Yanked(ctx, result.Site.resolverName(), current)
+		if err != nil || !yanked {
+			return "", err
+		}
+		if reason == "" {
+			reason = "yanked"
+		}
+		return reason, nil
+	})
+	if err == nil {
+		result.Yanked = reason
+	}
 }

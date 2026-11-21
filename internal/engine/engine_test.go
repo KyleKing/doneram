@@ -359,3 +359,30 @@ func TestMatchPrecision(t *testing.T) {
 		}
 	}
 }
+
+type yankingResolver struct {
+	fakeResolver
+	yanked map[string]string
+}
+
+func (y *yankingResolver) Yanked(_ context.Context, _ string, v string) (string, bool, error) {
+	reason, ok := y.yanked[v]
+	return reason, ok, nil
+}
+
+func TestRunSitesFlagsYankedPin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "req.txt")
+	if err := os.WriteFile(path, []byte("pkg==1.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sites := []Site{{Tool: "pkg", Locator: locator.Locator{Glob: path, Pattern: `pkg==([\d.]+)`, Resolver: "mise"}}}
+	res := &yankingResolver{fakeResolver: fakeResolver{version: "1.0.1"}, yanked: map[string]string{"1.1.0": ""}}
+
+	results := RunSites(context.Background(), sites, lookupWith(res))
+	if results[0].Yanked != "yanked" {
+		t.Errorf("Yanked = %q, want the default reason", results[0].Yanked)
+	}
+	if results[0].Latest != "1.0.1" || results[0].Behind != "" {
+		t.Errorf("Latest = %q, Behind = %q; a yanked pin should move back to 1.0.1", results[0].Latest, results[0].Behind)
+	}
+}
