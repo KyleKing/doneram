@@ -87,10 +87,16 @@ func (r *NPMResolver) Resolve(ctx context.Context, pkg string, pattern *parser.V
 	})
 
 	// A deprecated version is skipped unless every match is deprecated,
-	// which is how npm marks a whole package as deprecated.
+	// which is how npm marks a whole package as deprecated. A version
+	// younger than the cooldown is not offered yet.
+	cutoff := cooldownCutoff(ctx)
 	fallback := ""
 	for i := len(versions) - 1; i >= 0; i-- {
 		if !pattern.Matches(versions[i]) {
+			continue
+		}
+		if at, ok := data.Time[versions[i]]; ok && !cutoff.IsZero() && at.After(cutoff) {
+			logger.Info("release held by cooldown", "resolver", "npm", "package", pkg, "version", versions[i], "published", at)
 			continue
 		}
 		if _, deprecated := data.Versions[versions[i]].deprecation(); deprecated {

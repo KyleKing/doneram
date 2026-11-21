@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kyleking/doneram/internal/httpclient"
@@ -22,6 +23,11 @@ import (
 type GitHubReleaseResolver struct {
 	client  *http.Client
 	baseURL string
+
+	// recent caches each repository's newest 100 releases, which History
+	// and Tag both read.
+	mu     sync.Mutex
+	recent map[string][]githubRelease
 }
 
 func NewGitHubReleaseResolver(client *http.Client) *GitHubReleaseResolver {
@@ -206,13 +212,66 @@ func getGitHubJSON[T any](ctx context.Context, client *http.Client, url string) 
 	return out, nil
 }
 
-// History lists a repository's published releases, newest 100.
-func (r *GitHubReleaseResolver) History(ctx context.Context, repo string) ([]support.Release, error) {
+// recentReleases is a repository's newest 100 releases, fetched once per
+// run.
+func (r *GitHubReleaseResolver) recentReleases(ctx context.Context, repo string) ([]githubRelease, error) {
+	r.mu.Lock()
+	cached, ok := r.recent[repo]
+	r.mu.Unlock()
+	if ok {
+		return cached, nil
+	}
 	owner, name, err := splitOwnerRepo(repo)
 	if err != nil {
 		return nil, err
 	}
 	releases, err := getGitHubJSON[[]githubRelease](ctx, r.client, fmt.Sprintf("%s/repos/%s/%s/releases?per_page=100", r.baseURL, owner, name))
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	if r.recent == nil {
+		r.recent = map[string][]githubRelease{}
+	}
+	r.recent[repo] = releases
+	r.mu.Unlock()
+	return releases, nil
+}
+
+// Tag names the git tag a version was released under: the version as
+// written, or with a leading "v", whichever the repository used. It reads
+// releases, then tags for a project that never cuts releases, and returns
+// "" when neither has the version.
+func (r *GitHubReleaseResolver) Tag(ctx context.Context, repo, version string) (string, error) {
+	version = strings.TrimPrefix(version, "v")
+	releases, err := r.recentReleases(ctx, repo)
+	if err != nil {
+		return "", err
+	}
+	for _, rel := range releases {
+		if strings.TrimPrefix(rel.TagName, "v") == version {
+			return rel.TagName, nil
+		}
+	}
+	owner, name, err := splitOwnerRepo(repo)
+	if err != nil {
+		return "", err
+	}
+	tags, err := getGitHubJSON[[]githubTag](ctx, r.client, fmt.Sprintf("%s/repos/%s/%s/tags?per_page=100", r.baseURL, owner, name))
+	if err != nil {
+		return "", err
+	}
+	for _, t := range tags {
+		if strings.TrimPrefix(t.Name, "v") == version {
+			return t.Name, nil
+		}
+	}
+	return "", nil
+}
+
+// History lists a repository's published releases, newest 100.
+func (r *GitHubReleaseResolver) History(ctx context.Context, repo string) ([]support.Release, error) {
+	releases, err := r.recentReleases(ctx, repo)
 	if err != nil {
 		return nil, err
 	}

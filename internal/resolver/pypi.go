@@ -95,7 +95,17 @@ func (r *PyPIResolver) Resolve(ctx context.Context, pkg string, pattern *parser.
 		return version.Compare(version.Parse(versions[i]), version.Parse(versions[j])) < 0
 	})
 
+	// A release younger than the cooldown is not offered yet.
+	cutoff := cooldownCutoff(ctx)
 	for i := len(versions) - 1; i >= 0; i-- {
+		if !cutoff.IsZero() {
+			if at := pypiUploaded(data.Releases[versions[i]]); !at.IsZero() && at.After(cutoff) {
+				if pattern.Matches(versions[i]) {
+					logger.Info("release held by cooldown", "resolver", "pypi", "package", pkg, "version", versions[i], "published", at)
+				}
+				continue
+			}
+		}
 		if pattern.Matches(versions[i]) {
 			logger.Info("resolved package", "resolver", "pypi", "package", pkg, "version", versions[i])
 			return versions[i], nil
@@ -127,15 +137,20 @@ func (r *PyPIResolver) History(ctx context.Context, pkg string) ([]support.Relea
 	}
 	var out []support.Release
 	for v, files := range doc.Releases {
-		var first time.Time
-		for _, f := range files {
-			if first.IsZero() || f.UploadTime.Before(first) {
-				first = f.UploadTime
-			}
-		}
-		if !first.IsZero() {
+		if first := pypiUploaded(files); !first.IsZero() {
 			out = append(out, support.Release{Version: v, Date: first})
 		}
 	}
 	return out, nil
+}
+
+// pypiUploaded is when a release's first file was uploaded.
+func pypiUploaded(files []pypiFile) time.Time {
+	var first time.Time
+	for _, f := range files {
+		if first.IsZero() || f.UploadTime.Before(first) {
+			first = f.UploadTime
+		}
+	}
+	return first
 }

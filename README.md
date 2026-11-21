@@ -374,9 +374,10 @@ immediately-yanked release. `--min-age` defaults to 72h, following
 Dependabot's own three-day cooldown. Set it to 0 to take releases as they
 land, or raise it where a bad version would be expensive.
 
-The cooldown applies where the registry publishes a release date, which
-today means GitHub Releases. A project that only cuts tags has no date to
-read, so its pins are offered as soon as the tag appears. When the newest
+The cooldown applies where the registry publishes a release date: GitHub
+Releases, npm, and PyPI. A project that only cuts tags has no date to read,
+so its pins are offered as soon as the tag appears, and so are mise tools,
+whose versions come from `mise ls-remote` without dates. When the newest
 release outside the window is older than the pin itself, the pin is kept and
 reported as behind, never patched backwards.
 
@@ -427,7 +428,9 @@ skipped quietly.
 
 Most pins (an action, a CLI, a library) have no endoflife.date entry. For
 those, doneram reads the project's own release history (GitHub releases,
-npm, PyPI) and judges the version the run leaves on disk:
+npm, PyPI, and for a mise tool, wherever its backend points: `aqua:`,
+`github:`, and github.com Go modules to GitHub, `pipx:` to PyPI, `npm:` to
+npm) and judges the version the run leaves on disk:
 
 - **Support window.** For every release line (a major, or a 0.x minor), how
   long patches kept coming after the next line shipped. A line that has gone
