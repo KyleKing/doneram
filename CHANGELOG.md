@@ -1,3 +1,14 @@
+## v0.7.0 (2026-11-21)
+
+### Feat
+
+- discover pins, fast-track CVE fixes, and grade major action bumps
+
+### Fix
+
+- keep pin precision and read CI's Go version from go.mod
+- **engine**: never propose a version older than the pin
+
 ## v0.6.1 (2026-11-13)
 
 ### Fix
