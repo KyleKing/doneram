@@ -1,3 +1,9 @@
+## v0.12.0 (2026-11-21)
+
+### Feat
+
+- pin floating action tags and mise prefixes (#8)
+
 ## v0.11.0 (2026-11-21)
 
 ### Feat
