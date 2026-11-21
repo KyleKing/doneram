@@ -18,3 +18,20 @@ func NestedRepo(root, dir string) bool {
 	_, err := os.Lstat(filepath.Join(dir, ".git"))
 	return err == nil
 }
+
+// skipNames are directories that hold someone else's code (vendored
+// dependencies, virtualenvs), build output, or test inputs, none of which
+// pins this repo ships.
+var skipNames = map[string]bool{
+	".git": true, "node_modules": true, "vendor": true, ".venv": true, "venv": true,
+	"target": true, "dist": true, "build": true, "testdata": true, "fixtures": true,
+	"tests": true, "__tests__": true,
+}
+
+// Skip reports whether a scan of root should not descend into dir.
+func Skip(root, dir string) bool {
+	if filepath.Clean(root) == filepath.Clean(dir) {
+		return false
+	}
+	return skipNames[filepath.Base(dir)] || NestedRepo(root, dir)
+}

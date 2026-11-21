@@ -76,12 +76,6 @@ var imageProducts = map[string]string{
 // ("bookworm").
 var imageCycle = regexp.MustCompile(`^v?(\d+(?:\.\d+)*)|^([a-z]+)$`)
 
-var skipDirs = map[string]bool{
-	".git": true, "node_modules": true, "vendor": true, ".venv": true, "venv": true,
-	"target": true, "dist": true, "build": true, "testdata": true, "fixtures": true,
-	"tests": true, "__tests__": true,
-}
-
 // Scan returns every lifecycle reference under baseDir, sorted by file
 // and line.
 func Scan(baseDir string) ([]Ref, error) {
@@ -92,7 +86,7 @@ func Scan(baseDir string) ([]Ref, error) {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if path != baseDir && (skipDirs[name] || (strings.HasPrefix(name, ".") && name != ".github") || walk.NestedRepo(baseDir, path)) {
+			if walk.Skip(baseDir, path) || (path != baseDir && strings.HasPrefix(name, ".") && name != ".github") {
 				return filepath.SkipDir
 			}
 			return nil

@@ -74,7 +74,7 @@ func TestCheckCommandDefinesFlags(t *testing.T) {
 	if cmd.Name != "check" {
 		t.Fatalf("cmd.Name = %q, want check", cmd.Name)
 	}
-	assertHasFlags(t, cmd, "file", "format", "workers")
+	assertHasFlags(t, cmd, "format", "workers", "only", "min-age")
 }
 
 func TestUpdateCommandDefinesFlags(t *testing.T) {
@@ -82,7 +82,7 @@ func TestUpdateCommandDefinesFlags(t *testing.T) {
 	if cmd.Name != "update" {
 		t.Fatalf("cmd.Name = %q, want update", cmd.Name)
 	}
-	assertHasFlags(t, cmd, "file", "format", "workers", "skip-build", "skip-healthcheck")
+	assertHasFlags(t, cmd, "format", "workers", "plan", "group")
 }
 
 func assertHasFlags(t *testing.T, cmd *cli.Command, names ...string) {

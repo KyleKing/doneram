@@ -66,7 +66,7 @@ func TestRunCheckPklFailsOnUnresolvedSite(t *testing.T) {
 	}
 }
 
-func TestRunCheckFallsBackToDockerfileWithoutConfig(t *testing.T) {
+func TestRunCheckWithoutConfigReadsDockerfile(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 	writeDockerfile(t, dir, "Dockerfile")
@@ -104,8 +104,8 @@ func TestRunCheckPklApplyPatchesAndRunsAfterPatch(t *testing.T) {
 	}
 
 	outputPath := filepath.Join(dir, "summary.json")
-	if err := runApp(t, "check", "--apply", "--output", outputPath); err != nil {
-		t.Fatalf("check --apply: %v", err)
+	if err := runApp(t, "update", "--min-age", "0", "--output", outputPath); err != nil {
+		t.Fatalf("update: %v", err)
 	}
 
 	patched, err := os.ReadFile(filepath.Join(dir, "conf.toml"))

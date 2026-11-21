@@ -25,11 +25,6 @@ var (
 	composeLine = regexp.MustCompile(`^\s*image:\s*['"]?([^'"\s#]+)`)
 )
 
-// imageSkipDirs are never descended into when looking for Dockerfiles.
-var imageSkipDirs = map[string]bool{
-	".git": true, "node_modules": true, "vendor": true, ".venv": true, "venv": true,
-}
-
 func isImageFile(name string) bool {
 	lower := strings.ToLower(name)
 	switch {
@@ -49,7 +44,7 @@ func imageFiles(baseDir string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
-			if path != baseDir && (imageSkipDirs[d.Name()] || walk.NestedRepo(baseDir, path)) {
+			if walk.Skip(baseDir, path) {
 				return filepath.SkipDir
 			}
 			return nil

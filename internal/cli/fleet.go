@@ -41,6 +41,11 @@ func newFleetCommand() *cli.Command {
 				Usage: "number of repos covered in parallel",
 				Value: 4,
 			},
+			&cli.DurationFlag{
+				Name:  "min-age",
+				Usage: "hold back a release until it is this old, matching Dependabot's three-day default; 0 disables",
+				Value: resolver.DefaultCooldown,
+			},
 			&cli.BoolFlag{
 				Name:  "apply",
 				Usage: "update each clean repo and commit the result on " + fleet.Branch + "; the checked-out branch is left alone and nothing is pushed",
@@ -77,7 +82,7 @@ func runFleet(ctx context.Context, cmd *cli.Command) error {
 	if len(repos) == 0 {
 		return exitf(ExitConfig, "no git repos under %s match --match %q", dir, match)
 	}
-	ctx = resolver.ContextWithCooldown(ctx, resolver.DefaultCooldown)
+	ctx = resolver.ContextWithCooldown(ctx, cmd.Duration("min-age"))
 	report := fleet.Run(ctx, repos, fleet.Options{Apply: cmd.Bool("apply"), Workers: int(cmd.Int("workers")), Log: os.Stderr}, fleetCheck)
 	return writeFleetReport(report, os.Stdout, cmd.String("report"), cmd.String("json"))
 }

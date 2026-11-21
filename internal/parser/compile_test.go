@@ -129,3 +129,20 @@ func TestSplitImageRef(t *testing.T) {
 		}
 	}
 }
+
+func TestCompileKeepsTagVariant(t *testing.T) {
+	df, err := Parse("# doneram: python:3.13.#\nFROM python:3.13.1-slim\n# doneram: golang:1.#.#-alpine*\nFROM golang:1.22.1-alpine3.19\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sites := CompileLocators("Dockerfile", df)
+	if len(sites) != 2 {
+		t.Fatalf("sites = %+v", sites)
+	}
+	if c := sites[0].Constraint; !c.Matches("3.13.18-slim") || c.Matches("3.13.18") {
+		t.Errorf("python constraint %+v should keep -slim", c)
+	}
+	if c := sites[1].Constraint; c.Suffix != "alpine*" {
+		t.Errorf("golang constraint %+v should keep its own suffix", c)
+	}
+}

@@ -14,7 +14,7 @@ func NewApp(version, commit, date string) *cli.Command {
 	appVersion = version
 	return &cli.Command{
 		Name:    "doneram",
-		Usage:   "Version pin maintainer for Dockerfiles and .doneram.pkl config sites",
+		Usage:   "Keep pinned versions current: find, resolve, patch, and validate them",
 		Version: version,
 		Before:  setupLogging,
 		// main picks the exit code from the returned error; urfave/cli's

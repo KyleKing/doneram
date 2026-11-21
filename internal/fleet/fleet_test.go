@@ -177,3 +177,28 @@ func TestRunApplyWithNothingToCommit(t *testing.T) {
 		t.Errorf("left on %q", got)
 	}
 }
+
+func TestRunApplyHonorsCommitHooks(t *testing.T) {
+	dir := newRepo(t, t.TempDir(), "hooked")
+	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho rejected >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	head := gitT(t, dir, "rev-parse", "HEAD")
+	rep := Run(context.Background(), []string{dir}, Options{Apply: true, Workers: 1}, bump).Repos[0]
+	if rep.Status != StatusFailed || rep.Commit != "" {
+		t.Errorf("report = %+v, want a failure from the hook", rep)
+	}
+	if out := gitT(t, dir, "branch", "--list", Branch); out != "" {
+		t.Errorf("a rejected commit still made %s", Branch)
+	}
+	if got := gitT(t, dir, "rev-parse", "HEAD"); got != head {
+		t.Errorf("HEAD moved to %s", got)
+	}
+	if status := gitT(t, dir, "status", "--porcelain"); status != "" {
+		t.Errorf("tree left dirty: %s", status)
+	}
+}
