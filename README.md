@@ -155,8 +155,9 @@ the command to run by hand.
 
 In the template repository itself, declare the pins in its `.jinja`
 sources with an `afterPatch` that re-renders, so the weekly PR there is
-the one place a version moves. `doneram fleet` then rolls the release out:
-each project's run proposes the copier update in its weekly PR.
+the one place a version moves. Each project's own weekly run then proposes
+the copier update, and `doneram fleet --apply` can make it across local
+checkouts.
 
 ### Pinning floating references
 
@@ -643,65 +644,35 @@ up in one PR and not the plan; the next week's run settles it.
 
 ## Fleet
 
-`doneram fleet` covers many repos from one process, so they need no
-workflow of their own. For each repo it clones the default branch, runs
-the same plan `update` runs (with the repo's `.doneram.pkl`, or on what
-discovery finds when it has none), and then, per group, applies that
-group to a clean tree, force-pushes it to `doneram/<group>`, and opens a
-draft PR or rewrites the open one's title and body. A branch that already
-holds the same tree is not pushed again, so an unchanged group reruns no
-CI. Then it prints one report across every repo.
+`doneram fleet` runs doneram over the local checkouts in one directory:
+every direct child whose name matches `--match` (and not `--exclude`) and
+that is a git repo. Each repo runs what `check` runs, with its own
+`.doneram.pkl` or on what discovery finds, in the normal environment.
 
 ```bash
-export GITHUB_TOKEN=...   # contents, pull requests, and workflows: write
-doneram fleet --org acme --dry-run          # report only
-doneram fleet --org acme --exclude legacy-app
-doneram fleet --repo acme/api --repo acme/web --close-stale
-doneram fleet --repos-file repos.txt --report fleet.md --json fleet.json
+doneram fleet                                   # every repo under .
+doneram fleet --dir ~/src --match '^acme-' --exclude legacy
+doneram fleet --report fleet.md --json fleet.json
+doneram fleet --dir ~/src --apply               # commit updates on doneram/updates
 ```
 
-- `--org` lists an organization's repos, or a user's when the name is not
-  an organization, and leaves out archived repos and forks. An empty repo
-  is reported as skipped. `--repo` and `--repos-file` (one `owner/name` per
-  line) cover a repo even when archived.
-- `--dry-run` plans without patching: the report lists each repo's
-  groups, and nothing is pushed or opened. It needs no token for public
-  repos.
-- `--close-stale` closes open `doneram/*` PRs whose group this week's plan
-  no longer has, and deletes their branches. Without it they are left.
-- `--workers` (default 4) covers that many repos at once. `--workdir`
-  keeps the clones, and beside each one the plan run's own log.
-- `--author` signs the commits, `doneram <doneram@users.noreply.github.com>`
-  by default; the commit message is the group's title.
+By default nothing is changed: it prints one report with a row per repo
+(updates, vulnerable pins and lockfile packages, floating references, and
+end-of-life items), then each repo's drift, findings, and errors.
+`--report` and `--json` also write it to files. `--workers` (default 4)
+sets how many repos run at once.
 
-doneram owns `doneram/*` branches and recreates them each run, as
-peter-evans/create-pull-request does; it never pushes anywhere else. A
-repo that also runs the per-repo workflow above would fight over the same
-branches, so pick one. The token goes to git as an `http.extraheader`
-through `GIT_CONFIG_*` variables, never in a URL, an argument, or the log.
+`--apply` runs `update` in each repo and commits the result as
+`chore: doneram updates`, listing what changed, on the `doneram/updates`
+branch, recreated from the current HEAD each run. It works on a detached
+HEAD and checks the original branch out again afterwards, so the branch
+you are on and your working tree are untouched. A repo with uncommitted
+changes, or with `doneram/updates` checked out, is skipped. Nothing is
+pushed and no PR is opened; the report gives each repo's commit.
 
-The report has one row per repo (updates, security fixes, lockfile
-advisories, floating references, and end-of-life items) and each group's
-PR link or the error that stopped it. It goes to stdout, to `--report`
-and `--json` when given, and to the job summary under Actions. A push
-that touches `.github/workflows` with a token lacking the workflows
-permission fails that group only. The exit is non-zero (4) only when a
-repo failed outright: its clone or plan.
-
-[`examples/fleet.yml`](examples/fleet.yml) runs it weekly from one
-central repo, with a `dry_run` input for a manual run. It mints an
-owner-wide token from the doneram GitHub App when its secrets are set,
-and uses a `DONERAM_FLEET_TOKEN` personal token otherwise. Each covered
-repo's `validate`, `afterPatch`, and tool commands run in that job, but
-never with the write token: doneram takes `GITHUB_TOKEN` out of the
-environment before any repo's code runs, keeps it for its own git and API
-calls, and puts `DONERAM_READ_TOKEN` in its place for registry rate limits
-(the template passes the job's own read-only token). A repo's code can
-still use the runner and its network, so cover repos whose config you
-would run in CI.
-
-Comment directives in a Dockerfile of a repo with no `.doneram.pkl` are
-not read by `fleet`; give that repo a config, or run `update` there.
+The exit is non-zero (4) only when a repo failed outright. Comment
+directives in a Dockerfile of a repo with no `.doneram.pkl` are not read
+by `fleet`; give that repo a config, or run `update` there.
 
 ## Validation
 

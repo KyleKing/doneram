@@ -43,7 +43,7 @@ type Site struct {
 	EOL string
 
 	// Dir is where Command runs, empty meaning the working directory. A
-	// fleet run checks many clones from one process, so it cannot rely on
+	// fleet run checks many repos from one process, so it cannot rely on
 	// the working directory being the repo.
 	Dir string
 }
