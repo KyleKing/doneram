@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/support"
 	"github.com/kyleking/doneram/pkg/version"
 )
 
@@ -38,6 +40,9 @@ func (r *NPMResolver) Name() string {
 
 type npmResponse struct {
 	Versions map[string]npmVersion `json:"versions"`
+	// Time maps each version to its publish date, beside "created" and
+	// "modified".
+	Time map[string]time.Time `json:"time"`
 }
 
 type npmVersion struct {
@@ -119,4 +124,19 @@ func (r *NPMResolver) Yanked(ctx context.Context, pkg, v string) (string, bool, 
 
 func (r *NPMResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {
 	return "", nil
+}
+
+// History lists every published version with its date.
+func (r *NPMResolver) History(ctx context.Context, pkg string) ([]support.Release, error) {
+	doc, err := r.fetch(ctx, pkg)
+	if err != nil {
+		return nil, err
+	}
+	var out []support.Release
+	for v, at := range doc.Time {
+		if _, ok := doc.Versions[v]; ok {
+			out = append(out, support.Release{Version: v, Date: at})
+		}
+	}
+	return out, nil
 }

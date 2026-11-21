@@ -30,6 +30,11 @@ type pklLifecycleSummary struct {
 	Date     string `json:"date,omitempty"`
 	DaysLeft *int   `json:"daysLeft,omitempty"`
 	Past     bool   `json:"past"`
+	// Inferred marks a verdict drawn from the project's release history
+	// rather than a published end-of-life date; Reason says why. An
+	// inferred entry is Past only when the history is confident.
+	Inferred bool   `json:"inferred,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 // checkLifecycle looks up every lifecycle reference under baseDir and
@@ -80,7 +85,7 @@ func checkLifecycle(ctx context.Context, out report, baseDir string, client *eol
 	if len(flagged) > 0 {
 		out.printf("\nEnd of life:\n")
 		for _, s := range flagged {
-			out.printf("%s %s:%d %s: %s\n", map[bool]string{true: "✗", false: "⚠"}[s.Past], s.File, s.Line, s.Name, lifecycleLine(s))
+			printLifecycle(out, s)
 		}
 	}
 	return flagged, nil
@@ -88,6 +93,10 @@ func checkLifecycle(ctx context.Context, out report, baseDir string, client *eol
 
 func lifecycleLine(s pklLifecycleSummary) string {
 	switch {
+	case s.Inferred && s.Past:
+		return fmt.Sprintf("%s %s looks unmaintained: %s", s.Product, s.Cycle, s.Reason)
+	case s.Inferred:
+		return fmt.Sprintf("%s %s may be unmaintained: %s", s.Product, s.Cycle, s.Reason)
 	case s.Past && s.Date != "":
 		return fmt.Sprintf("%s %s reached end of life on %s", s.Product, s.Cycle, s.Date)
 	case s.Past:
@@ -112,6 +121,10 @@ func writeLifecycleSection(body *strings.Builder, items []pklLifecycleSummary) {
 
 func lifecycleStatus(s pklLifecycleSummary) string {
 	switch {
+	case s.Inferred && s.Past:
+		return "**unmaintained** (inferred: " + s.Reason + ")"
+	case s.Inferred:
+		return "likely unmaintained (inferred: " + s.Reason + ")"
 	case s.Past && s.Date != "":
 		return "**ended " + s.Date + "**"
 	case s.Past:
@@ -170,4 +183,8 @@ func relTo(baseDir, path string) string {
 		return filepath.ToSlash(rel)
 	}
 	return path
+}
+
+func printLifecycle(out report, s pklLifecycleSummary) {
+	out.printf("%s %s:%d %s: %s\n", map[bool]string{true: "✗", false: "⚠"}[s.Past], s.File, s.Line, s.Name, lifecycleLine(s))
 }

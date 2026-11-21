@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/support"
 	"github.com/kyleking/doneram/pkg/version"
 )
 
@@ -40,8 +42,9 @@ type pypiResponse struct {
 }
 
 type pypiFile struct {
-	Yanked       bool    `json:"yanked"`
-	YankedReason *string `json:"yanked_reason"`
+	UploadTime   time.Time `json:"upload_time_iso_8601"`
+	Yanked       bool      `json:"yanked"`
+	YankedReason *string   `json:"yanked_reason"`
 }
 
 // yanked reports whether every file of a release is yanked, which is what
@@ -114,4 +117,25 @@ func (r *PyPIResolver) Yanked(ctx context.Context, pkg, v string) (string, bool,
 
 func (r *PyPIResolver) GetChangelog(ctx context.Context, pkg string, from, to string) (string, error) {
 	return "", nil
+}
+
+// History lists every release with the date its first file was uploaded.
+func (r *PyPIResolver) History(ctx context.Context, pkg string) ([]support.Release, error) {
+	doc, err := r.fetch(ctx, pkg)
+	if err != nil {
+		return nil, err
+	}
+	var out []support.Release
+	for v, files := range doc.Releases {
+		var first time.Time
+		for _, f := range files {
+			if first.IsZero() || f.UploadTime.Before(first) {
+				first = f.UploadTime
+			}
+		}
+		if !first.IsZero() {
+			out = append(out, support.Release{Version: v, Date: first})
+		}
+	}
+	return out, nil
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/support"
 )
 
 // GitHubActionResolver resolves a GitHub Action `uses: owner/repo@<sha> #
@@ -125,4 +126,9 @@ func exactTag(tags []githubTag, ref, sha string) string {
 		}
 	}
 	return best
+}
+
+// History lists the action repository's releases.
+func (r *GitHubActionResolver) History(ctx context.Context, repo string) ([]support.Release, error) {
+	return r.releases.History(ctx, repo)
 }

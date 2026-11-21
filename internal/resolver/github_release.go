@@ -12,6 +12,7 @@ import (
 
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/support"
 	"github.com/kyleking/doneram/pkg/version"
 )
 
@@ -201,6 +202,26 @@ func getGitHubJSON[T any](ctx context.Context, client *http.Client, url string) 
 
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return out, fmt.Errorf("decoding GitHub response: %w", err)
+	}
+	return out, nil
+}
+
+// History lists a repository's published releases, newest 100.
+func (r *GitHubReleaseResolver) History(ctx context.Context, repo string) ([]support.Release, error) {
+	owner, name, err := splitOwnerRepo(repo)
+	if err != nil {
+		return nil, err
+	}
+	releases, err := getGitHubJSON[[]githubRelease](ctx, r.client, fmt.Sprintf("%s/repos/%s/%s/releases?per_page=100", r.baseURL, owner, name))
+	if err != nil {
+		return nil, err
+	}
+	var out []support.Release
+	for _, rel := range releases {
+		if rel.Draft || rel.Prerelease || prereleaseTagPattern.MatchString(rel.TagName) {
+			continue
+		}
+		out = append(out, support.Release{Version: rel.TagName, Date: rel.PublishedAt})
 	}
 	return out, nil
 }

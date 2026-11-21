@@ -422,6 +422,26 @@ moving a runtime or a model is a migration to plan, not a version bump.
 fixtures are not scanned for model IDs, and a reference no cycle covers is
 skipped quietly.
 
+### Inferred from release history
+
+Most pins (an action, a CLI, a library) have no endoflife.date entry. For
+those, doneram reads the project's own release history (GitHub releases,
+npm, PyPI) and judges the version the run leaves on disk:
+
+- **Support window.** For every release line (a major, or a 0.x minor), how
+  long patches kept coming after the next line shipped. A line that has gone
+  longer than that without a release, while a newer line exists, has most
+  likely ended.
+- **Abandonment.** No release at all for four times the project's usual gap
+  between releases, and never less than a year.
+
+A verdict is *confident* when it has at least three past lines to learn the
+habit from (or eight releases, for abandonment) and the silence is twice
+the longest window the history shows. A confident verdict is reported as
+past end of life and counts toward `--fail-on-eol`; a weaker one is listed
+as likely unmaintained and never fails a run. A pin this run moves to a
+maintained line is judged at its new version, so it is not reported.
+
 ## Vulnerabilities
 
 Advisories come from [OSV](https://osv.dev), which covers PyPI, npm, Go,

@@ -4,7 +4,15 @@ import (
 	"context"
 
 	"github.com/kyleking/doneram/internal/parser"
+	"github.com/kyleking/doneram/internal/support"
 )
+
+// Historian is implemented by a Resolver that can list a package's
+// releases with their publish dates, which is what inferring an end of
+// life from release history needs.
+type Historian interface {
+	History(ctx context.Context, pkg string) ([]support.Release, error)
+}
 
 type Resolver interface {
 	Name() string
