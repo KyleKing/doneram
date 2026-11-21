@@ -2,13 +2,16 @@ package builder
 
 import (
 	"context"
+	"os/exec"
 	"testing"
+	"time"
 )
 
 func TestDockerQuerier_QueryPackages(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
+	requireDocker(t)
 
 	q := NewDockerQuerier(false)
 	ctx := context.Background()
@@ -47,5 +50,16 @@ func TestDockerQuerier_QueryPackages(t *testing.T) {
 				t.Logf("Query output:\n%s", output)
 			}
 		})
+	}
+}
+
+// requireDocker skips a test that needs a running Docker daemon when there
+// is none, so `go test ./...` passes on a machine without one.
+func requireDocker(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
+		t.Skipf("no reachable Docker daemon: %v", err)
 	}
 }

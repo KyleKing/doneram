@@ -1,7 +1,9 @@
 // doneram's own pinned versions, checked with doneram itself. Each site is a
 // literal in a file that consumes it. go.mod's own module directives are out
 // of scope: doneram doesn't manage Go module dependency versions, only
-// literal pins in text files.
+// literal pins in text files. Every workflow reads its Go toolchain from
+// go.mod (go-version-file), so the weekly gomod step owns that version and
+// there is no second copy here to drift.
 //
 // A site that matches a different number of times than `expect` fails the
 // run. A pattern that silently stops matching is how a pin goes stale
@@ -65,16 +67,6 @@ tools = new {
       new Config.Site {
         file = ".doneram.pkl"
         pattern = #"doneram@([\d.]+)#/Config\.pkl"#
-      }
-    }
-  }
-  ["go"] = new {
-    resolverName = "go"
-    sites = new {
-      new Config.Site {
-        file = ciYml
-        pattern = #"go-version: '([\d.]+)'"#
-        expect = 2
       }
     }
   }

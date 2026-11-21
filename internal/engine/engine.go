@@ -202,10 +202,11 @@ func (r *siteRunner) site(ctx context.Context, s Site) SiteResult {
 	if len(matches) > 0 {
 		current = matches[0].Value
 	}
-	if isOlder(latest, current) {
+	if IsOlder(latest, current) {
 		result.Behind = latest
 		return result
 	}
+	latest = matchPrecision(latest, current)
 	result.Latest = latest
 
 	detailer, ok := res.(resolver.Detailer)
@@ -237,11 +238,11 @@ func comparableVersion(value string) (string, bool) {
 	return value, plainVersion.MatchString(value)
 }
 
-// isOlder reports whether latest is numerically below current. Only the
+// IsOlder reports whether latest is numerically below current. Only the
 // numeric segments are compared: suffixes like alpine3.9 and alpine3.10 do
 // not order as strings, and a wrong "older" verdict would silently block a
 // real update, so a pin that differs only in its suffix is never held back.
-func isOlder(latest, current string) bool {
+func IsOlder(latest, current string) bool {
 	l, ok := comparableVersion(latest)
 	if !ok {
 		return false
@@ -253,4 +254,29 @@ func isOlder(latest, current string) bool {
 	lv, cv := version.Parse(l), version.Parse(c)
 	lv.Suffix, cv.Suffix = "", ""
 	return version.Compare(lv, cv) < 0
+}
+
+// dottedNumber is a version made only of numeric segments, with an optional
+// leading v: the shape whose precision a pin can choose on purpose.
+var dottedNumber = regexp.MustCompile(`^v?\d+(\.\d+)*$`)
+
+// matchPrecision trims latest to as many segments as current carries, so a
+// pin written as "v2.12" (a floating minor that the consuming tool expands
+// itself) moves to "v2.15" rather than being rewritten to "2.15.0". A pin
+// that already names every segment, or any value that is not plainly
+// dotted numbers, is returned unchanged. The v prefix follows current.
+func matchPrecision(latest, current string) string {
+	if !dottedNumber.MatchString(latest) || !dottedNumber.MatchString(current) {
+		return latest
+	}
+	want := strings.Count(current, ".") + 1
+	parts := strings.Split(strings.TrimPrefix(latest, "v"), ".")
+	if len(parts) <= want {
+		return latest
+	}
+	trimmed := strings.Join(parts[:want], ".")
+	if strings.HasPrefix(latest, "v") {
+		trimmed = "v" + trimmed
+	}
+	return trimmed
 }
