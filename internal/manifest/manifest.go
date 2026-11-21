@@ -22,6 +22,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/kyleking/doneram/internal/walk"
 )
 
 // Tool names the package manager that owns a project.
@@ -67,7 +69,7 @@ func Find(root string) ([]Project, error) {
 		if !d.IsDir() {
 			return nil
 		}
-		if path != root && (skipDirs[d.Name()] || strings.HasPrefix(d.Name(), ".")) {
+		if path != root && (skipDirs[d.Name()] || strings.HasPrefix(d.Name(), ".") || walk.NestedRepo(root, path)) {
 			return filepath.SkipDir
 		}
 		abs, err := filepath.Abs(path)

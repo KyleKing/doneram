@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/kyleking/doneram/internal/walk"
+
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/parser"
@@ -43,7 +45,7 @@ func terraformSites(baseDir string) ([]engine.Site, error) {
 			return err
 		}
 		if d.IsDir() {
-			if path != baseDir && (d.Name() == ".terraform" || d.Name() == ".git" || d.Name() == "node_modules") {
+			if path != baseDir && (d.Name() == ".terraform" || d.Name() == ".git" || d.Name() == "node_modules" || walk.NestedRepo(baseDir, path)) {
 				return filepath.SkipDir
 			}
 			return nil

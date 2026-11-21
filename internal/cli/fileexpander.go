@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kyleking/doneram/internal/walk"
+
 	"github.com/kyleking/doneram/internal/parser"
 )
 
@@ -85,6 +87,9 @@ func expandRecursive(pattern string) ([]string, error) {
 		}
 
 		if d.IsDir() {
+			if walk.NestedRepo(baseDir, path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 

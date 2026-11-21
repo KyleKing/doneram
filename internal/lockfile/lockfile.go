@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kyleking/doneram/internal/walk"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -65,7 +67,7 @@ func Find(root string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
-			if path != root && (skipDirs[d.Name()] || strings.HasPrefix(d.Name(), ".")) && d.Name() != ".github" {
+			if path != root && ((skipDirs[d.Name()] || strings.HasPrefix(d.Name(), ".")) && d.Name() != ".github" || walk.NestedRepo(root, path)) {
 				return filepath.SkipDir
 			}
 			return nil
