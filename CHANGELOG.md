@@ -1,3 +1,15 @@
+## v2.0.0 (2026-11-21)
+
+### BREAKING CHANGE
+
+- the GitHub clone/push/PR mode is gone, with --org,
+--repo, --repos-file, --close-stale, --workdir, --dry-run, --author,
+--min-age, and examples/fleet.yml.
+
+### Feat
+
+- add doneram explain and agent skills to finish failing and review bumps (#20)
+
 ## v1.0.0 (2026-11-21)
 
 ### BREAKING CHANGE
