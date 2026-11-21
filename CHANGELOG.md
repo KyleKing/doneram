@@ -1,3 +1,9 @@
+## v3.1.0 (2026-11-21)
+
+### Feat
+
+- resolve AMIs, SSM parameters, and GKE versions, and pin private cloud images (#24)
+
 ## v3.0.0 (2026-11-21)
 
 ### BREAKING CHANGE
