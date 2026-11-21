@@ -1,3 +1,9 @@
+## v0.15.0 (2026-11-21)
+
+### Feat
+
+- split updates into one PR per group, and bisect validate failures (#11)
+
 ## v0.14.0 (2026-11-21)
 
 ### Feat
