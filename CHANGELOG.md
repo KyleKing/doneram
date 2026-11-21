@@ -1,3 +1,9 @@
+## v0.21.0 (2026-11-21)
+
+### Feat
+
+- leave template-maintained pins to the template and trust your own templates (#17)
+
 ## v0.20.0 (2026-11-21)
 
 ### Feat
