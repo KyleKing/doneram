@@ -54,6 +54,10 @@ func newUpdateCommand() *cli.Command {
 				Usage: "write a GitHub dependency submission snapshot of the pins on disk to this path",
 			},
 			&cli.BoolFlag{
+				Name:  "fail-on-unpinned",
+				Usage: "exit 8 when an action is used by tag or a mise tool by prefix after the run",
+			},
+			&cli.BoolFlag{
 				Name:  "fail-on-vuln",
 				Usage: "exit 7 when a pin with a known advisory is still on disk after the run",
 			},
@@ -92,15 +96,16 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 	if len(patterns) == 0 {
 		if path, ok := findDoneramConfig(cmd.String("config")); ok {
 			return runCheckPkl(ctx, pklRun{
-				path:        path,
-				apply:       true,
-				output:      cmd.String("output"),
-				workers:     int(cmd.Int("workers")),
-				only:        cmd.StringSlice("only"),
-				format:      format,
-				failOnDrift: cmd.Bool("fail-on-drift"),
-				failOnVuln:  cmd.Bool("fail-on-vuln"),
-				snapshot:    cmd.String("snapshot"),
+				path:           path,
+				apply:          true,
+				output:         cmd.String("output"),
+				workers:        int(cmd.Int("workers")),
+				only:           cmd.StringSlice("only"),
+				format:         format,
+				failOnDrift:    cmd.Bool("fail-on-drift"),
+				failOnVuln:     cmd.Bool("fail-on-vuln"),
+				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
+				snapshot:       cmd.String("snapshot"),
 			})
 		}
 		if path := cmd.String("config"); path != "" {
@@ -110,14 +115,15 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 		// SHA-pinned actions and mise tools need no config at all.
 		if !fileExists("Dockerfile") {
 			return runCheckPkl(ctx, pklRun{
-				apply:       true,
-				output:      cmd.String("output"),
-				workers:     int(cmd.Int("workers")),
-				only:        cmd.StringSlice("only"),
-				format:      format,
-				failOnDrift: cmd.Bool("fail-on-drift"),
-				failOnVuln:  cmd.Bool("fail-on-vuln"),
-				snapshot:    cmd.String("snapshot"),
+				apply:          true,
+				output:         cmd.String("output"),
+				workers:        int(cmd.Int("workers")),
+				only:           cmd.StringSlice("only"),
+				format:         format,
+				failOnDrift:    cmd.Bool("fail-on-drift"),
+				failOnVuln:     cmd.Bool("fail-on-vuln"),
+				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
+				snapshot:       cmd.String("snapshot"),
 			})
 		}
 	}

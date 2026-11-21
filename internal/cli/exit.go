@@ -23,6 +23,9 @@ const (
 	// ExitVulnerable: --fail-on-vuln and a pin with a known advisory is
 	// still on disk.
 	ExitVulnerable = 7
+	// ExitUnpinned: --fail-on-unpinned (or `pin --check`) and an action
+	// or tool still names a moving target.
+	ExitUnpinned = 8
 )
 
 // ExitError carries the process exit code for an error. main reads it

@@ -86,3 +86,43 @@ func (r *GitHubActionResolver) Pin(ctx context.Context, repo, version string) (s
 	}
 	return "", fmt.Errorf("resolving %s@%s to a commit: %w", repo, version, lastErr)
 }
+
+// PinRef resolves a ref a workflow uses as written (a floating major "v4",
+// an exact tag "v4.2.2", or a bare version) to "<sha> # <tag>". A floating
+// ref is named in the comment by the most specific release tag pointing at
+// the same commit, so advisories and later updates compare against a real
+// version; when no such tag exists the ref itself is kept.
+func (r *GitHubActionResolver) PinRef(ctx context.Context, repo, ref string) (string, error) {
+	owner, name, err := splitOwnerRepo(repo)
+	if err != nil {
+		return "", err
+	}
+	commit, err := getGitHubJSON[githubCommit](ctx, r.client, fmt.Sprintf("%s/repos/%s/%s/commits/%s", r.baseURL, owner, name, ref))
+	if err != nil {
+		return "", fmt.Errorf("resolving %s@%s to a commit: %w", repo, ref, err)
+	}
+	if strings.Count(ref, ".") >= 2 {
+		return fmt.Sprintf("%s # %s", commit.SHA, ref), nil
+	}
+
+	tags, err := getGitHubJSON[[]githubTag](ctx, r.client, fmt.Sprintf("%s/repos/%s/%s/tags?per_page=100", r.baseURL, owner, name))
+	if err != nil {
+		return "", fmt.Errorf("listing tags for %s: %w", repo, err)
+	}
+	return fmt.Sprintf("%s # %s", commit.SHA, exactTag(tags, ref, commit.SHA)), nil
+}
+
+// exactTag picks, among tags on sha that extend ref ("v4" → "v4.2.2"), the
+// one with the most version segments, falling back to ref.
+func exactTag(tags []githubTag, ref, sha string) string {
+	best := ref
+	for _, t := range tags {
+		if t.Commit.SHA != sha || !strings.HasPrefix(t.Name, ref+".") || prereleaseTagPattern.MatchString(t.Name) {
+			continue
+		}
+		if strings.Count(t.Name, ".") > strings.Count(best, ".") {
+			best = t.Name
+		}
+	}
+	return best
+}

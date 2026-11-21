@@ -93,10 +93,26 @@ Most pins need no config. doneram finds and checks these on its own:
 
 - SHA-pinned actions written as `uses: owner/repo@<sha> # v1.2.3` in
   `.github/workflows/`, `.github/actions/*/action.yml`, and a root
-  `action.yml`. A SHA without its version comment, and a mutable tag pin,
-  are left alone.
+  `action.yml`. A SHA without its version comment is left alone; a
+  mutable tag is pinned first (below).
 - Plain versions under `[tools]` in `mise.toml`, and in `.tool-versions`.
   `latest`, `lts`, and arrays are not pins and are skipped.
+
+### Pinning floating references
+
+A tag or version prefix can point at new code without a commit in your
+repo. `doneram pin` rewrites each one as an exact pin, and `update` does the
+same before it checks anything, so the weekly PR carries them:
+
+- `uses: actions/checkout@v4` becomes `uses: actions/checkout@<sha> #
+  v4.2.2`, naming the full release the floating tag points at today so
+  advisories and later updates compare against a real version.
+- A mise `node = "22"`, `python = "latest"`, or `.tool-versions` `ruby 3`
+  becomes the exact version `mise latest` resolves it to.
+
+A branch ref (`@main`) has no release to name and is reported for you to
+pin by hand. `pin --check`, or `--fail-on-unpinned` on `check` and
+`update`, exits 8 while any floating reference remains.
 
 A repo with neither a `.doneram.pkl` nor a `Dockerfile` runs on discovery
 alone. With a config, discovered pins join the declared ones, and any pin a
@@ -253,6 +269,7 @@ in this table wins.
 | 3 | A pattern matched a different number of times than it expects |
 | 4 | A resolver could not answer (registry or network), worth a retry |
 | 7 | `--fail-on-vuln` and a pin with a known advisory is still on disk |
+| 8 | `--fail-on-unpinned` (or `pin --check`) and a floating reference remains |
 | 6 | `--fail-on-drift` and a pin is out of date |
 
 `--fail-on-vuln` is the CVE gate: run `update --fail-on-vuln` and a

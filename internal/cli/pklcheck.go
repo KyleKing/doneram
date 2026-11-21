@@ -20,6 +20,7 @@ import (
 	"github.com/kyleking/doneram/internal/discover"
 	"github.com/kyleking/doneram/internal/engine"
 	"github.com/kyleking/doneram/internal/eol"
+	"github.com/kyleking/doneram/internal/harden"
 	"github.com/kyleking/doneram/internal/httpclient"
 	"github.com/kyleking/doneram/internal/locator"
 	"github.com/kyleking/doneram/internal/osv"
@@ -55,6 +56,9 @@ type pklSummary struct {
 	// Lockfiles holds the vulnerable packages lockfiles resolve, raised
 	// in place when the run applies.
 	Lockfiles []pklLockSummary `json:"lockfiles,omitempty"`
+	// Hardened holds floating references (actions by tag, mise prefixes),
+	// pinned in place when the run applies.
+	Hardened []pklHardenSummary `json:"hardened,omitempty"`
 }
 
 type pklSiteSummary struct {
@@ -134,6 +138,12 @@ type pklRun struct {
 	eol *eol.Client
 	// osv overrides the OSV client, nil meaning the public API.
 	osv *osv.Client
+	// pin overrides how floating references are pinned, nil meaning the
+	// GitHub API and mise.
+	pin harden.Resolver
+	// failOnUnpinned turns a floating reference left on disk into a
+	// non-zero exit.
+	failOnUnpinned bool
 }
 
 // report is the running commentary. The json format keeps stdout clean for
@@ -173,6 +183,17 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		return fmt.Errorf("resolving %s: %w", path, err)
 	}
 
+	// Floating references are pinned before discovery reads the repo, so
+	// what they become is checked like any other pin in the same run.
+	var hardened []pklHardenSummary
+	var hardenFailures int
+	if cfg.DiscoverEnabled() && len(run.only) == 0 {
+		hardened, hardenFailures, err = hardenRepo(ctx, out, baseDir, apply, run.pin)
+		if err != nil {
+			return fmt.Errorf("pinning floating references: %w", err)
+		}
+	}
+
 	all := cfg.Sites(baseDir)
 	if cfg.DiscoverEnabled() {
 		found, err := discover.Sites(baseDir)
@@ -206,7 +227,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 			lockErrors++
 		}
 	}
-	if len(sites) == 0 && len(locks) == 0 {
+	if len(sites) == 0 && len(locks) == 0 && len(hardened) == 0 {
 		out.printf("%s declares no tools and has no discoverable pins\n", path)
 		summary := pklSummary{Results: []pklSiteSummary{}}
 		finishSummary(&summary)
@@ -332,6 +353,11 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	}
 	summary.Lockfiles = locks
 	unresolved += lockErrors
+	summary.Hardened = hardened
+	unresolved += hardenFailures
+	for _, h := range hardened {
+		patchedAny = patchedAny || h.Updated
+	}
 
 	if patchedAny && cfg.AfterPatch != "" {
 		if err := runAfterPatch(ctx, out, cfg.AfterPatch, baseDir); err != nil {
@@ -361,6 +387,18 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	if run.failOnVuln {
 		if n := countVulnerable(summary); n > 0 {
 			return exitf(ExitVulnerable, "%d site(s) still pin a version with a known advisory", n)
+		}
+	}
+
+	if run.failOnUnpinned {
+		floating := 0
+		for _, h := range summary.Hardened {
+			if !h.Updated {
+				floating++
+			}
+		}
+		if floating > 0 {
+			return exitf(ExitUnpinned, "%d floating reference(s); `doneram pin` pins them", floating)
 		}
 	}
 
@@ -675,14 +713,19 @@ func finishSummary(summary *pklSummary) {
 		rows = append(rows, s)
 	}
 
-	lockFixes := 0
+	lockFixes, pinned := 0, 0
 	for _, l := range summary.Lockfiles {
 		if l.Updated {
 			lockFixes++
 		}
 	}
+	for _, h := range summary.Hardened {
+		if h.Updated {
+			pinned++
+		}
+	}
 
-	summary.HasUpgrades = len(rows)+lockFixes > 0
+	summary.HasUpgrades = len(rows)+lockFixes+pinned > 0
 	if !summary.HasUpgrades {
 		summary.Title = "chore: no pin updates available"
 		summary.Body = "doneram found no pins to update."
@@ -702,6 +745,8 @@ func finishSummary(summary *pklSummary) {
 	}
 
 	switch {
+	case len(rows) == 0 && lockFixes == 0:
+		summary.Title = fmt.Sprintf("chore: pin %d floating reference(s)", pinned)
 	case len(rows) == 0:
 		summary.Title = fmt.Sprintf("fix: raise %d locked package(s) clearing advisories", lockFixes)
 	case len(security)+lockFixes > 0:
@@ -716,6 +761,7 @@ func finishSummary(summary *pklSummary) {
 		"Rows marked *ahead of --min-age* take the minimum fixed release before the cooldown would have offered it.", security)
 	writeSection(&body, "Needs review", "Major action bumps that change something this repo's workflows use.", review)
 	writeLockSection(&body, summary.Lockfiles)
+	writeHardenSection(&body, summary.Hardened)
 	writeSection(&body, "Updates", "", routine)
 	summary.Body = body.String()
 }
