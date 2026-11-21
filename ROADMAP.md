@@ -94,7 +94,10 @@ days rather than the 24 hours planned here.
 publishes a release date, which today is GitHub Releases. A project that
 only cuts tags has no date to read, and a repo whose every matching release
 sits inside the window offers nothing rather than falling through to
-`/tags`, which would hand back the release just held. The security
+`/tags`, which would hand back the release just held. When the newest
+release outside the window predates the pin itself, which happens the week
+a repo adopts its own fresh release, the pin is kept and reported as
+behind rather than patched backwards. The security
 exemption is not
 implemented: a cooldown can currently delay a fix as well as a bad release.
 It does not hide one, because the advisory and the minimum version that
