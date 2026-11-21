@@ -62,6 +62,11 @@ type pklSummary struct {
 	// Lifecycle holds references past or nearing end of life, found with
 	// no config. They are reported, never changed.
 	Lifecycle []pklLifecycleSummary `json:"lifecycle,omitempty"`
+	// Groups splits the changes into one pull request each; see pklGroup.
+	Groups []pklGroup `json:"groups,omitempty"`
+	// Validation is the output of a validate failure no single bump
+	// explains, shown on the updates pull request.
+	Validation string `json:"validation,omitempty"`
 }
 
 type pklSiteSummary struct {
@@ -150,6 +155,15 @@ type pklRun struct {
 	// failOnEOL turns a reference past its end of life into a non-zero
 	// exit.
 	failOnEOL bool
+	// group, read from a plan run's summary, narrows an apply to one pull
+	// request's changes. Nil applies everything and plans the groups.
+	group *pklGroup
+}
+
+// extras reports whether this run applies the changes that are not one
+// tool's bump: always, unless it is narrowed to a group without them.
+func (r pklRun) extras() bool {
+	return len(r.only) == 0 && (r.group == nil || r.group.Extras)
 }
 
 // report is the running commentary. The json format keeps stdout clean for
@@ -193,7 +207,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	// what they become is checked like any other pin in the same run.
 	var hardened []pklHardenSummary
 	var hardenFailures int
-	if cfg.DiscoverEnabled() && len(run.only) == 0 {
+	if cfg.DiscoverEnabled() && run.extras() {
 		hardened, hardenFailures, err = hardenRepo(ctx, out, baseDir, apply, run.pin)
 		if err != nil {
 			return fmt.Errorf("pinning floating references: %w", err)
@@ -226,7 +240,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	// tools with --only leaves them out.
 	var locks []pklLockSummary
 	var lockErrors int
-	if cfg.LockfilesEnabled() && len(run.only) == 0 {
+	if cfg.LockfilesEnabled() && run.extras() {
 		locks, err = scanLockfiles(ctx, baseDir, osvClient)
 		if err != nil {
 			out.printf("? lockfiles: %v\n", err)
@@ -267,6 +281,19 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	var mismatches, unresolved, patchFailures int
 	var patchedAny bool
 	summary := pklSummary{Results: make([]pklSiteSummary, 0, len(results))}
+	// patchedLines are the file:line spots this run rewrote, so a group
+	// without extras refreshes only the digests its own bumps touched.
+	patchedLines := map[string]bool{}
+
+	// A plan run with a validate command keeps the tree as it stands
+	// before any bump, so bisection can replay subsets of them.
+	validating := apply && run.group == nil && cfg.Validate != ""
+	var snapshot string
+	if validating {
+		if snapshot, err = gitSnapshot(ctx, baseDir); err != nil {
+			out.printf("? validate: %v; a failure will not be bisected\n", err)
+		}
+	}
 
 	headlines := make([]string, len(results))
 	for i, result := range results {
@@ -319,7 +346,11 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 		siteSummary.needsUpdate = result.Err == nil && siteNeedsPatch(result)
 
-		if apply && siteSummary.needsUpdate {
+		if apply && siteSummary.needsUpdate && (run.group == nil || run.group.has(result.Site.Tool)) {
+			for _, m := range result.Matches {
+				abs, _ := filepath.Abs(m.File)
+				patchedLines[fmt.Sprintf("%s:%d", abs, m.Line)] = true
+			}
 			count, err := patchSite(result)
 			if err != nil {
 				out.printf("✗ %s: patch failed: %v\n", result.Site.Tool, err)
@@ -355,7 +386,11 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	if apply && cfg.DiscoverEnabled() && len(run.only) == 0 {
 		// Runs after every patch, so a tag a site just moved gets the
 		// digest that matches it.
-		refreshed, n, err := refreshDigests(ctx, out, baseDir, run.pin)
+		var only map[string]bool
+		if !run.extras() {
+			only = patchedLines
+		}
+		refreshed, n, err := refreshDigests(ctx, out, baseDir, run.pin, only)
 		if err != nil {
 			return fmt.Errorf("refreshing image digests: %w", err)
 		}
@@ -365,7 +400,7 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 	summary.Hardened = hardened
 	unresolved += hardenFailures
 
-	if cfg.DiscoverEnabled() && len(run.only) == 0 {
+	if cfg.DiscoverEnabled() && run.extras() {
 		// A line a config site already checks with its own eol is
 		// reported there, once.
 		covered := map[string]bool{}
@@ -394,7 +429,18 @@ func runCheckPkl(ctx context.Context, run pklRun) error {
 		}
 	}
 
+	var offenders map[string]string
+	if validating && patchedAny {
+		offenders, summary.Validation = validateAndBisect(ctx, out, cfg, baseDir, snapshot, results, summary, locks, run.pin)
+	}
+
 	finishSummary(&summary)
+	if run.group != nil {
+		summary.HasUpgrades = patchedAny
+		summary.Title, summary.Body = run.group.Title, run.group.Body
+	} else {
+		buildGroups(&summary, offenders)
+	}
 	if err := run.emit(summary, outputPath); err != nil {
 		return err
 	}
@@ -930,6 +976,19 @@ func writeSummary(summary pklSummary, outputPath string) error {
 	}
 
 	if _, err := fmt.Fprintf(f, "has_upgrades=%t\n", summary.HasUpgrades); err != nil {
+		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
+	}
+	// groups feeds a workflow matrix: one job, and one pull request, per
+	// group id. Ids are slugs, so the list is safe on one line.
+	ids := make([]string, 0, len(summary.Groups))
+	for _, g := range summary.Groups {
+		ids = append(ids, g.ID)
+	}
+	groups, err := json.Marshal(ids)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(f, "groups=%s\n", groups); err != nil {
 		return fmt.Errorf("writing GITHUB_OUTPUT: %w", err)
 	}
 	if err := writeHeredoc(f, "title", summary.Title); err != nil {

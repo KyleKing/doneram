@@ -140,11 +140,12 @@ owns a file does the resolving.
    endoflife.date product and reported when past or within 90 days of end
    of life; `--fail-on-eol` gates it. Reported, never bumped: a runtime or
    model move is a migration.
-4. **PR shape, kept lean.** Split one PR per review/breaking item from the
-   security-plus-routine PR so one risky bump never blocks the rest, and a
-   `validate` command that, on failure, bisects the bumps and holds the
-   offender with the failure as its reason. No auto-merge and no policy
-   table: GitHub rulesets already decide what merges.
+4. **PR shape, kept lean. Shipped.** A plan run splits its changes into
+   groups (`updates`, `review-<tool>`, `failing-<tool>`) that a workflow
+   matrix opens as separate PRs through `update --plan --group`. A
+   `validate` command that fails is bisected over git snapshots, and each
+   offending bump becomes its own PR carrying the failure. No auto-merge
+   and no policy table: GitHub rulesets already decide what merges.
 5. **Declared-constraint bump plus relock.** Raise `pyproject.toml` and
    `package.json` constraints, then run `uv lock` / `npm install
    --package-lock-only` (the uv#6794 gap).

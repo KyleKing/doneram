@@ -56,8 +56,11 @@ type Tool struct {
 
 // Config is a repo's .doneram.pkl, evaluated to JSON.
 type Config struct {
-	AfterPatch string          `json:"afterPatch"`
-	Tools      map[string]Tool `json:"tools"`
+	AfterPatch string `json:"afterPatch"`
+	// Validate runs after an update; when it fails, the bumps are bisected
+	// and each one that breaks it is split into a pull request of its own.
+	Validate string          `json:"validate"`
+	Tools    map[string]Tool `json:"tools"`
 	// Discover adds the pins doneram finds on its own (SHA-pinned actions,
 	// mise tools) to the ones Tools declares. Nil, as in a config written
 	// before the field existed, means on.

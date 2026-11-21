@@ -80,6 +80,14 @@ func newUpdateCommand() *cli.Command {
 				Usage: "check only these tools from a .doneram.pkl config (repeatable)",
 			},
 			&cli.StringFlag{
+				Name:  "plan",
+				Usage: "a summary JSON from an earlier update run; with --group, apply only that group's changes",
+			},
+			&cli.StringFlag{
+				Name:  "group",
+				Usage: "the group in --plan to apply (updates, review-<tool>, failing-<tool>)",
+			},
+			&cli.StringFlag{
 				Name:  "output",
 				Usage: "write a .doneram.pkl config's JSON summary to this path",
 			},
@@ -98,6 +106,18 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 
 	ctx = resolver.ContextWithCooldown(ctx, cmd.Duration("min-age"))
 
+	var group *pklGroup
+	if id := cmd.String("group"); id != "" || cmd.String("plan") != "" {
+		if id == "" || cmd.String("plan") == "" {
+			return exitf(ExitConfig, "--plan and --group go together")
+		}
+		g, err := loadGroup(cmd.String("plan"), id)
+		if err != nil {
+			return &ExitError{Code: ExitConfig, Err: err}
+		}
+		group = g
+	}
+
 	if len(patterns) == 0 {
 		if path, ok := findDoneramConfig(cmd.String("config")); ok {
 			return runCheckPkl(ctx, pklRun{
@@ -112,6 +132,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
 				failOnEOL:      cmd.Bool("fail-on-eol"),
 				snapshot:       cmd.String("snapshot"),
+				group:          group,
 			})
 		}
 		if path := cmd.String("config"); path != "" {
@@ -131,6 +152,7 @@ func runUpdate(ctx context.Context, cmd *cli.Command) error {
 				failOnUnpinned: cmd.Bool("fail-on-unpinned"),
 				failOnEOL:      cmd.Bool("fail-on-eol"),
 				snapshot:       cmd.String("snapshot"),
+				group:          group,
 			})
 		}
 	}
