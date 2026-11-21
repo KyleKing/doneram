@@ -110,6 +110,8 @@ func Scan(baseDir string) ([]Ref, error) {
 			refs, err2 = scanRunners(path)
 		case name == "pyproject.toml" || name == "package.json" || name == "go.mod":
 			refs, err2 = scanConstraint(path)
+		case isIaC(rel, lower):
+			refs, err2 = scanIaC(path)
 		}
 		if err2 != nil {
 			return err2
@@ -121,6 +123,11 @@ func Scan(baseDir string) ([]Ref, error) {
 				return err
 			}
 			out = append(out, models...)
+			apis, err := scanAPIVersions(path)
+			if err != nil {
+				return err
+			}
+			out = append(out, apis...)
 		}
 		return nil
 	})
